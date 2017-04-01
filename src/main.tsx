@@ -21,7 +21,7 @@ class SpriteAtlas {
 		}
 	});
 
-	readonly COASTAL = new easeljs.SpriteSheet({
+	readonly FOREST = new easeljs.SpriteSheet({
 		images: [forestImage],
 		frames: {
 			width: 32,
@@ -35,6 +35,42 @@ class SpriteAtlas {
 	});
 	readonly MOUNTAIN = new easeljs.SpriteSheet({
 		images: [mountainImage],
+		frames: {
+			width: 32,
+			height: 32,
+			regX: 16,
+			regY: 16
+		},
+		animations: {
+			"idle": [0]
+		}
+	});
+	readonly ALCHEMY = new easeljs.SpriteSheet({
+		images: [alchemyImage],
+		frames: {
+			width: 32,
+			height: 32,
+			regX: 16,
+			regY: 16
+		},
+		animations: {
+			"idle": [0]
+		}
+	});
+	readonly CITY = new easeljs.SpriteSheet({
+		images: [cityImage],
+		frames: {
+			width: 32,
+			height: 32,
+			regX: 16,
+			regY: 16
+		},
+		animations: {
+			"idle": [0]
+		}
+	});
+	readonly COASTAL = new easeljs.SpriteSheet({
+		images: [coastalImage],
 		frames: {
 			width: 32,
 			height: 32,
@@ -65,20 +101,25 @@ class Game {
 	constructor() {
 		let fish = new GoodType("Fish", "Produced in coastal villages, highly", "fish");
 		let ingot = new GoodType("Ingot", "Produced in coastal villages, highly", "ingot");
+		let wood = new GoodType("Wood", "Produced in coastal villages, highly", "wood");
 
 		let coastal = new CityType("Coastal", [fish], spriteAtlas.COASTAL);
 		let mountain = new CityType("Mountain", [ingot], spriteAtlas.MOUNTAIN);
+		let alchemy = new CityType("Alchemy", [ingot], spriteAtlas.ALCHEMY);
+		let cityType = new CityType("City", [ingot], spriteAtlas.CITY);
 
-		let city = new City("Del'Arrah", coastal, 100, 100);
-		let secondCity = new City("Keltos", coastal, 180, 80);
-		let thirdCity = new City("Kratop", mountain, 180, 150);
+		let city = new City("Del'Arrah", coastal, 140, 58);
+		let secondCity = new City("Keltos", coastal, 121, 213);
+		let thirdCity = new City("Kratop", alchemy, 209, 36);
+		let fourth = new City("Telesee", cityType, 100, 130);
 
-		this.goodTypes = [fish];
-		this.cityTypes = [coastal, mountain];
-		this.cities = [city, secondCity, thirdCity];
+		this.goodTypes = [fish, ingot, wood];
+		this.cityTypes = [coastal, mountain, alchemy, cityType];
+		this.cities = [city, secondCity, thirdCity, fourth];
 		this.links = [
-			new CityLink(city, secondCity),
-			new CityLink(secondCity, thirdCity)
+			new CityLink(fourth, city),
+			new CityLink(city, thirdCity),
+			new CityLink(secondCity, fourth)
 		];
 	}
 
@@ -86,6 +127,10 @@ class Game {
 		this.stage.enableMouseOver();
 
 		// We draw the world
+		// Map behind
+		let background = new easeljs.Bitmap(mapImage);
+
+		this.stage.addChild(background);
 		// Cities
 		this.cities.forEach((city) => {
 			city.sprite = new easeljs.Sprite(city.type.spritesheet);
@@ -112,7 +157,7 @@ class Game {
 			let {x, y, x2, y2} = this.getOffsetLink(link);
 
 			g.setStrokeStyle(1);
-			g.beginStroke("white");
+			g.beginStroke("black");
 			g.moveTo(x, y);
 
 			g.lineTo(x2, y2);
@@ -211,7 +256,7 @@ class GoodType {
 }
 
 class Transport {
-	readonly SPEED = 50;
+	readonly SPEED = 20;
 	readonly RADIUS_AROUND_CITY = 10;
 
 	public sprite: easeljs.Sprite;
@@ -244,7 +289,11 @@ class Transport {
 		} else {
 			// Taking the road~
 			let {x, y, x2, y2} = this.game.getOffsetLink(this.takenLink);
-			this.sprite.x = x + (x2 - x) * this.takenLink.forward(this.location) ? this.advancement : ;
+			let targetX = x + (x2 - x) * (this.takenLink.forward(this.location) ? this.advancement : 1 - this.advancement);
+			let targetY = y + (y2 - y) * (this.takenLink.forward(this.location) ? this.advancement : 1 - this.advancement);
+
+			this.sprite.x = Math.round(targetX);
+			this.sprite.y = Math.round(targetY);
 
 			this.advancement += delta * this.SPEED / this.takenLink.distance();
 
@@ -419,6 +468,14 @@ let forestImage = new Image();
 forestImage.src = "assets/forest.png";
 let wainImage = new Image();
 wainImage.src = "assets/wain.png";
+let mapImage = new Image();
+mapImage.src = "assets/map.png";
+let alchemyImage = new Image();
+alchemyImage.src = "assets/alchemy.png";
+let coastalImage = new Image();
+coastalImage.src = "assets/coastal.png";
+let cityImage = new Image();
+cityImage.src = "assets/city.png";
 
 let spriteAtlas = new SpriteAtlas();
 
