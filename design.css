@@ -1,0 +1,77 @@
+@font-face {
+    font-family: "Press Start";
+    src: url(assets/PrStart.ttf);
+}
+
+@font-face {
+    font-family: "CP12";
+    src: url(assets/CP1-2.ttf);
+}
+
+html, body {
+	height: 100%;
+}
+
+hr {
+	border: none;
+	height: 1px;
+	background-color: white;
+}
+
+body {
+	margin: 0px;
+	background: black;
+	color: white;
+	font-family: "CP12";
+	font-size: 12px;
+}
+
+button {
+	display: inline-block;
+	background: none;
+	border: 1px solid white;
+	color: white;
+	font-family: "CP12";
+	padding: 10px 5px;
+}
+
+button:hover {
+	cursor: pointer;
+}
+
+.city-title {
+	font-size: 14px;
+}
+
+.good-slot {
+	width: 34px;
+	height: 34px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	border: 1px solid white;
+	padding: 2px;
+}
+
+.crispy {
+	image-rendering: optimizeSpeed;             /* Older versions of FF          */
+	image-rendering: -moz-crisp-edges;          /* FF 6.0+                       */
+	image-rendering: -webkit-optimize-contrast; /* Safari                        */
+	image-rendering: -o-crisp-edges;            /* OS X & Windows Opera (12.02+) */
+	image-rendering: pixelated;                 /* Awesome future-browsers       */
+	-ms-interpolation-mode: nearest-neighbor;   /* IE                            */
+}
+
+.tooltip {
+	border: 1px solid white;
+	background-color: black;
+	padding: 4px;
+	min-width: 180px;
+}
+
+.tooltip-container {
+	position: absolute;
+	left: 0px;
+	top: calc(100% + 15px);
+	z-index: 1000;
+}
