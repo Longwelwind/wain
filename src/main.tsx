@@ -8,6 +8,8 @@ import * as ReactDOM from "react-dom";
 import * as cs from "react-classset";
 import TooltipComponent from "./TooltipComponent";
 
+const DEBUG = true;
+
 class SpriteAtlas {
 	readonly WAIN = new easeljs.SpriteSheet({
 		images: [wainImage],
@@ -18,7 +20,14 @@ class SpriteAtlas {
 			regY: 8
 		},
 		animations: {
-			"idle": [0, 3, "idle", 0.1]
+			"idle": {
+				frames: [0],
+				speed: 0.1
+			},
+			"travel": {
+				frames: [0, 1, 2, 3],
+				speed: 0.1
+			}
 		}
 	});
 
@@ -115,7 +124,14 @@ class SpriteAtlas {
 			regY: 8
 		},
 		animations: {
-			"idle": [0, 6, "idle", 0.1]
+			"idle": {
+				frames: [0],
+				speed: 0.1
+			},
+			"travel": {
+				frames: [0, 1, 2, 3, 4, 5,6],
+				speed: 0.1
+			}
 		}
 	});
 }
@@ -128,9 +144,11 @@ class Game {
 
 	goodTypes: GoodType[];
 	cityTypes: CityType[];
+	buildingTypes: BuildingType[];
 	cities: City[];
 	links: CityLink[];
-	transports: Transport[] = [];
+	@observable transports: Transport[] = [];
+	timeElapsed: number;
 
 	selectedCursor: easeljs.DisplayObject;
 	@observable selectedCity: City;
@@ -140,6 +158,9 @@ class Game {
 		let fish = new GoodType("Fish", "Produced in coastal villages, highly", "fish");
 		let ingot = new GoodType("Ingot", "Produced in coastal villages, highly", "ingot");
 		let wood = new GoodType("Wood", "Produced in coastal villages, highly", "wood");
+		let herbs = new GoodType("Herbs", "I really need to find a good description for this item", "herbs");
+		let potion = new GoodType("Potion", "Produced in coastal villages, highly", "potion");
+		let sword = new GoodType("Sword", "Produced in coastal villages, highly", "sword");
 
 		let caravan = new TransportType("Caravan", spriteAtlas.WAIN);
 		let boat = new TransportType("Boat", spriteAtlas.BOAT);
@@ -149,19 +170,24 @@ class Game {
 		let alchemy = new CityType("Alchemy", [ingot], [wood], spriteAtlas.ALCHEMY);
 		let cityType = new CityType("City", [ingot], [fish], spriteAtlas.CITY);
 
-		let city = new City("Del'Arrah", coastal, 280, 120);
-		let secondCity = new City("Keltos", mountain, 240, 420);
-		let thirdCity = new City("Kratop", alchemy, 420, 70);
-		let fourth = new City("Telesee", cityType, 200, 260);
+		let forge = new BuildingType("Forge", 100, [ingot], sword, 10);
 
-		this.goodTypes = [fish, ingot, wood];
+		let city = new City(this, "Del'Arrah", coastal, 140*2, 60*2);
+		let secondCity = new City(this, "Keltos", mountain, 120*2, 210*2);
+		let thirdCity = new City(this, "Kratop", alchemy, 210*2, 35*2);
+		let fourth = new City(this, "Telesee", cityType, 100*2, 130*2);
+		let fifth = new City(this, "Telesee", coastal, 170*2, 150*2);
+
+		this.goodTypes = [fish, ingot, wood, herbs, potion, sword];
 		this.cityTypes = [coastal, mountain, alchemy, cityType];
-		this.cities = [city, secondCity, thirdCity, fourth];
+		this.cities = [city, secondCity, thirdCity, fourth, fifth];
 		this.links = [
 			new CityLink(fourth, city, caravan),
 			new CityLink(city, thirdCity, boat),
-			new CityLink(secondCity, fourth, caravan)
+			new CityLink(secondCity, fourth, caravan),
+			new CityLink(secondCity, fifth, caravan)
 		];
+		this.buildingTypes = [forge];
 	}
 
 	start() {
@@ -249,7 +275,7 @@ class Game {
 		let transport = new Transport(this, city, link);
 		this.transports.push(transport);
 
-		transport.sprite = new easeljs.Sprite(link.type.spritesheet, "idle");
+		transport.sprite = new easeljs.Sprite(link.type.spritesheet);
 		this.stage.addChild(transport.sprite);
 		transport.sprite.cursor = "pointer";
 		transport.sprite.scaleY = transport.sprite.scaleX = 2;
@@ -278,6 +304,7 @@ class Game {
 
 	update(delta: number) {
 		this.stage.update();
+		this.timeElapsed += delta;
 
 		this.transports.forEach((t) => t.update(delta));
 
@@ -285,6 +312,8 @@ class Game {
 			this.selectedCursor.x = this.selectedTransport.sprite.x;
 			this.selectedCursor.y = this.selectedTransport.sprite.y;
 		}
+
+		this.cities.forEach((c) => c.update(delta));
 	}
 
 	public neighbours(city: City): CityLink[] {
@@ -298,11 +327,134 @@ class CityType {
 	}
 }
 
-class City {
-	public sprite: easeljs.Sprite;
+class GoodQuantity {
+	@observable quantity: number;
 
-	constructor(public name: string, public type: CityType, public x: number, public y: number) {
+	constructor(public good: GoodType, quantity: number) {
+		this.quantity = quantity;
+	}
+}
+
+class BuildingType {
+	public constructor(public name: string, public price: number, public ingredients: GoodType[], public result: GoodType, public time: number) {
+
+	}
+}
+
+class Building {
+	@observable working: boolean = false;
+	@observable timeRemaining: number = 0;
+
+	public constructor(public city: City, public type: BuildingType) {
+
+	}
+
+	public update(delta: number) {
+		if (this.working) {
+			this.timeRemaining -= delta;
+
+			if (this.timeRemaining < 0) {
+				this.city.inventory.addItem(this.type.result, 1);
+
+				this.working = false;
+			}
+		} else {
+			this.tryStart();
+		}
+	}
+
+	public tryStart() {
+		if (this.working) {
+			return;
+		}
+
+		if (this.type.ingredients.some((i) => !this.city.inventory.has(i, 1))) {
+			return;
+		}
+
+		this.type.ingredients.forEach((i) => this.city.inventory.removeItem(i, 1));
+		this.working = true;
+		this.timeRemaining = this.type.time;
+	}
+}
+
+export default class Inventory {
+	@observable items: GoodQuantity[] = [];
+
+	public addItem(good: GoodType, quantity: number) {
+		if (quantity < 0) {
+			throw new Error("addItem: Trying to add negative quantity");
+		}
+
+		var itemQuantity = this.getItemQuantity(good);
+		if (itemQuantity == null) {
+			itemQuantity = new GoodQuantity(good, 0);
+			this.items.push(itemQuantity);
+		}
+
+		itemQuantity.quantity += quantity;
+
+		if (itemQuantity.quantity < 0) {
+			this.items.splice(this.items.indexOf(itemQuantity), 1);
+		}
+	}
+
+	public removeItem(good: GoodType, quantity: number) {
+		if (quantity < 0) {
+			throw new Error("addItem: Trying to remove negative quantity");
+		}
+
+		var itemQuantity = this.getItemQuantity(good);
+		if (itemQuantity == null) {
+			return;
+		}
+
+		itemQuantity.quantity -= quantity;
+
+		if (itemQuantity.quantity <= 0) {
+			this.items.splice(this.items.indexOf(itemQuantity), 1);
+		}
+	}
+
+	public has(good: GoodType, quantity: number): boolean {
+		return this.getQuantity(good) >= quantity;
+	}
+
+	public getQuantity(good: GoodType): number {
+	   var itemQuantity = this.getItemQuantity(good);
+	   if (itemQuantity != null) {
+		   return itemQuantity.quantity;
+	   } else {
+		   return 0;
+	   }
+	}
+
+	public isEmpty(): boolean {
+		return this.items.length == 0;
+	}
+
+	private getItemQuantity(item: GoodType): GoodQuantity {
+		return this.items.filter((iq) => { return iq.good == item; })[0];
+	}
+}
+
+class City {
+	sprite: easeljs.Sprite;
+	@observable buildings: Building[] = [];
+	inventory: Inventory = new Inventory();
+
+	constructor(public game: Game, public name: string, public type: CityType, public x: number, public y: number) {
 		
+	}
+
+	getAvailableBuildings(): BuildingType[] {
+		return this.game.buildingTypes;
+	}
+
+	update(delta: number) {
+		this.buildings.map((b) => {
+			b.update(delta);
+		});
 	}
 }
 
@@ -369,6 +521,7 @@ class Transport {
 	public waitingTimeRemaining: number;
 	public sprite: easeljs.Sprite;
 	public advancement: number;
+	public transportedGood: GoodType;
 
 	@observable firstCityActions: CityAction[] = [];
 	@observable secondCityActions: CityAction[] = [];
@@ -386,7 +539,42 @@ class Transport {
 			this.waitingTimeRemaining -= delta;
 
 			if (this.waitingTimeRemaining < 0) {
+				// We execute our orders
+				// This defines the order in which the orders will be carried out
+				let orderTypes = [TransportAction.SELL, TransportAction.DROP, TransportAction.BUY, TransportAction.TAKE];
+				orderTypes.forEach((orderType) => {
+					let orders: CityAction[] = [];
+					if (this.link.firstCity == this.location) {
+						orders = this.firstCityActions;
+					} else {
+						orders = this.secondCityActions;
+					}
+
+					orders = orders.filter((o) => o.action == orderType);
+
+					orders.forEach((o) => {
+						if (o.action == TransportAction.BUY) {
+							this.transportedGood = o.good;
+						} else if (o.action == TransportAction.SELL) {
+							this.transportedGood = null;
+							this.game.money += 100;
+						} else if (o.action == TransportAction.TAKE) {
+							if (!this.location.inventory.has(o.good, 1)) {
+								return;
+							}
+							this.location.inventory.removeItem(o.good, 1);
+							this.transportedGood = o.good;
+						} else if (o.action == TransportAction.DROP) {
+							if (this.transportedGood != o.good) {
+								return;
+							}
+							this.location.inventory.addItem(o.good, 1);
+						}
+					})
+				});
+
 				// We go on our way
+				this.sprite.gotoAndPlay("travel");
 				this.offsetAroundCityX = 0;
 				this.advancement = 0;
 			}
@@ -397,6 +585,7 @@ class Transport {
 			if (this.advancement > 1) {
 				this.location = this.link.other(this.location);
 				this.waitingTimeRemaining = this.TIME_WAITING;
+				this.sprite.gotoAndPlay("idle");
 			}
 
 			// Making so that the transport faces the right direction
@@ -484,14 +673,19 @@ class GoodComponent extends React.Component<GoodComponentProps, null> {
 		return (
 			<TooltipComponent
 				tooltip={(
-					<div className="tooltip">
+					<div className="box tooltip">
 						<div style={{fontSize: 16}}>{this.props.good.name}</div>
 						<div>{this.props.good.description}</div>
+						{this.props.addedTooltipText != undefined && (
+							<div style={{marginTop: 10}} dangerouslySetInnerHTML={{__html: this.props.addedTooltipText}}>
+							</div>
+						)}
 					</div>
 				)}
 			>
 				<div
 					className={cs({
+						"crispy": true,
 						"good-slot": true,
 						"good-slot-hover": this.props.pointerHover
 					})}
@@ -507,8 +701,8 @@ class GoodComponent extends React.Component<GoodComponentProps, null> {
 							position: "absolute",
 							left: 0,
 							right: 0,
-							marginLeft: 2,
-							marginRight: 2,
+							marginLeft: 4,
+							marginRight: 4,
 							backgroundColor: "black",
 							paddingRight: 2,
 							paddingLeft: 2,
@@ -519,7 +713,6 @@ class GoodComponent extends React.Component<GoodComponentProps, null> {
 							{this.props.text}
 						</span>
 					)}
-					
 				</div>
 			</TooltipComponent>
 		);
@@ -535,6 +728,7 @@ class GameApp extends React.Component<GameAppProps, null> {
 		let selectedCity = this.props.game.selectedCity;
 		let selectedTransport = this.props.game.selectedTransport;
 		return (
+			<div>
 			<div style={{display: "flex"}}>
 				<canvas
 					className="crispy"
@@ -548,14 +742,30 @@ class GameApp extends React.Component<GameAppProps, null> {
 				</canvas>
 				<div style={{width: 200}}>
 					<div style={{fontSize: 16}}>
-						{this.props.game.money} gold
+						{this.props.game.money}<span className="money-icon"></span>
 
 					</div>
 					<hr />
 					{selectedCity != null && (
 					<div>
-						<div className="city-title">{selectedCity.name}</div>
-						<div className="city-type">{selectedCity.type.name}</div>
+						<div style={{display: "flex", justifyContent: "space-between"}}>
+							<div style={{fontSize: 14}}>{selectedCity.name}</div>
+							<div className="city-type">{selectedCity.type.name}</div>
+						</div>
+						{!selectedCity.inventory.isEmpty() && (
+							<div>
+								Warehouse
+								<div className="row-good">
+									{selectedCity.inventory.items.map((gq) => (
+										<GoodComponent
+											good={gq.good}
+											text={gq.quantity.toString()}
+											pointerHover
+										/>
+									))}
+								</div>
+							</div>
+						)}
 						<hr />
 						Selling
 						<div style={{display: "flex", flexWrap: "wrap"}}>
@@ -573,10 +783,89 @@ class GameApp extends React.Component<GameAppProps, null> {
 						<hr />
 						{this.props.game.neighbours(selectedCity).map((link) => (
 						<button style={{width: "100%"}} onClick={() => this.buyWain(link)}>
-							Buy a {link.type.name} (to {link.other(selectedCity).name})
+							Buy a {link.type.name} (to {link.other(selectedCity).name})<br />
+							1500<span className="money-icon"></span>
 						</button>
 						))}
-						
+						{selectedCity.getAvailableBuildings().length > 0 && (
+							<div>
+								<hr />
+								Buildings
+								<div>
+									{selectedCity.buildings.map((b) => (
+										<div className="box">
+											{b.type.name}
+											<div style={{display: "flex", alignItems: "center"}}>
+												{b.type.ingredients.map((i) => (
+													<GoodComponent
+														good={i}
+														pointerHover={false}
+													/>
+												))}
+												{b.working ? (
+													<div>
+														<div
+															className="arrow-progress crispy"
+															style={{
+																backgroundPosition: this.getProgressBarX(Math.round(100 * (1 - b.timeRemaining / b.type.time))) + "px 0"
+															}}
+														>
+														</div>
+													</div>
+												) : (
+													<div>
+														<div className="arrow-progress crispy">
+														</div>
+													</div>
+												)}
+												<GoodComponent
+													good={b.type.result}
+													pointerHover={false}
+												/>
+											</div>
+										</div>
+									))}
+								</div>
+								<div>
+									{selectedCity.getAvailableBuildings().map((bt) => (
+										<TooltipComponent
+											tooltip={(
+												<div className="box tooltip">
+													<div style={{fontSize: 16}}></div>
+													<div style={{display: "flex", alignItems: "center"}}>
+														{bt.ingredients.map((i) => (
+															<GoodComponent
+																good={i}
+																pointerHover={false}
+															/>
+														))}
+														<div>
+															->
+														</div>
+														<GoodComponent
+															good={bt.result}
+															pointerHover={false}
+														/>
+													</div>
+												</div>
+											)}
+										>
+										<button
+											onClick={() => this.buyBuilding(selectedCity, bt)}
+											style={{width: "100%", display: "flex", justifyContent: "space-between"}}
+										>
+											<div>
+												Buy a {bt.name}
+											</div>
+											<div>
+												{bt.price}<div className="money-icon"></div>
+											</div>
+										</button>
+										</TooltipComponent>
+									))}
+								</div>
+							</div>
+						)}
 					</div>
 					)}
 					{selectedTransport != null && (
@@ -597,11 +886,30 @@ class GameApp extends React.Component<GameAppProps, null> {
 						)}
 						<hr />
 						<button style={{width: "100%"}}>
-							Sell wain
+							Sell {selectedTransport.link.type.name}
 						</button>
 					</div>
 					)}
 				</div>
+			</div>
+			{DEBUG && (
+				<div style={{marginTop: 10}}>
+					Debug & cheats<br />
+					Spawn item
+					{selectedCity != null && (
+						<div className="row-good">
+							{this.props.game.goodTypes.map((good) => (
+								<div onClick={() => selectedCity.inventory.addItem(good, 1)}>
+									<GoodComponent
+										good={good}
+										pointerHover={true}
+									/>
+								</div>
+							))}
+						</div>
+					)}
+				</div>
+			)}
 			</div>
 		);
 	}
@@ -620,6 +928,7 @@ class GameApp extends React.Component<GameAppProps, null> {
 							}}
 							text={action != null ? this.getActionText(action.action) : null}
 							pointerHover={true}
+							addedTooltipText={action != null ? this.getActionTooltip(action.action) : null}
 						/>
 					</div>
 					)
@@ -642,6 +951,13 @@ class GameApp extends React.Component<GameAppProps, null> {
 		return actions.filter((a) => a.good == good)[0];
 	}
 
+	private getProgressBarX(percentage: number) {
+		const SIZE = 32;
+		const COUNT = 21;
+
+		return -SIZE * Math.round(COUNT * percentage / 100);
+	}
+
 	private getActionText(action: TransportAction): string {
 		switch (action) {
 			case (TransportAction.BUY):
@@ -657,6 +973,30 @@ class GameApp extends React.Component<GameAppProps, null> {
 		}
 	}
 
+	private getActionTooltip(action: TransportAction): string {
+		let tt = "[Click] to change behaviour";
+		switch (action) {
+			case (TransportAction.BUY):
+				tt += "<br />Will buy this good in the town's market";
+				break;
+			case (TransportAction.DROP):
+				tt += "<br />Will drop this good in the town's warehouse";
+				break;
+			case (TransportAction.TAKE):
+				tt += "<br />Will take this good in the town's warehouse";
+				break;
+			case (TransportAction.SELL):
+				tt += "<br />Will sell this good in the town's market";
+				break;
+		}
+		return tt;
+	}
+
+	private buyBuilding(city: City, type: BuildingType) {
+		let building = new Building(city, type);
+		city.buildings.push(building);
+	}
+
 	private toggleGoodCity(good: GoodType, actions: CityAction[]) {
 		let action = this.getAction(good, actions);
 		if (action == null) {
@@ -669,7 +1009,6 @@ class GameApp extends React.Component<GameAppProps, null> {
 			} else {
 				action.action = CityAction.TRANSPORT_ACTIONS[i];
 			}
-			
 		}
 	}
 
@@ -687,6 +1026,10 @@ class GameApp extends React.Component<GameAppProps, null> {
 
 	private update(delta: number) {
 		this.props.game.update(delta);
+	}
+
+	private formatPercentage(perc: number): string {
+		return perc < 10 ? "0" + perc.toString() : perc.toString() ;
 	}
 
 	private updateLoop() {
@@ -740,4 +1083,3 @@ let game = new Game();
 window["game"] = game;
 
 ReactDOM.render(<GameApp game={game} />, document.getElementById("container"));
-

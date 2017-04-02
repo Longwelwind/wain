@@ -33,25 +33,26 @@ button {
 	color: white;
 	font-family: "CP12";
 	padding: 10px 5px;
+	font-size: inherit;
 }
 
 button:hover {
 	cursor: pointer;
 }
 
-.city-title {
-	font-size: 14px;
+.slot-background {
+	border-image: url("assets/good-slot.png")
 }
 
 .good-slot {
-	width: 34px;
-	height: 34px;
+	width: 36px;
+	height: 36px;
 	display: flex;
 	justify-content: center;
 	align-items: center;
-	padding: 2px;
 	background-image: url("assets/good-slot.png");
-	background-size: 100%;
+	background-size: 36px;
+	background-position: center;
 }
 
 .good-slot-hover:hover {
@@ -67,16 +68,45 @@ button:hover {
 	-ms-interpolation-mode: nearest-neighbor;   /* IE                            */
 }
 
-.tooltip {
+.box {
 	border: 1px solid white;
 	background-color: black;
 	padding: 4px;
-	min-width: 180px;
+}
+
+.tooltip {
+	min-width: 240px;
 }
 
 .tooltip-container {
 	position: absolute;
 	left: 0px;
-	top: calc(100% + 15px);
+	top: calc(100% + 6px);
 	z-index: 1000;
+}
+
+.money-icon {
+	width: 16px;
+	height: 16px;
+	display: inline-block;
+	background-image: url("assets/money.png");
+	margin-bottom: -3px;
+	margin-left: 2px;
+}
+
+.arrow-progress {
+	background-image: url("assets/arrow-progress.png");
+	width: 32px;
+	height: 32px;
+	background-size: auto 32px;
+}
+
+.row-good {
+	display: flex;
+	flex-wrap: wrap;
+	margin: -3px -3px;
+}
+
+.row-good > * {
+	margin: 3px 3px;
 }

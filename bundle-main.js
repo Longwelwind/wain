@@ -25807,6 +25807,7 @@ var React = __webpack_require__(32);
 var ReactDOM = __webpack_require__(55);
 var cs = __webpack_require__(83);
 var TooltipComponent_1 = __webpack_require__(84);
+var DEBUG = true;
 var SpriteAtlas = (function () {
     function SpriteAtlas() {
         this.WAIN = new easeljs.SpriteSheet({
@@ -25818,7 +25819,14 @@ var SpriteAtlas = (function () {
                 regY: 8
             },
             animations: {
-                "idle": [0, 3, "idle", 0.1]
+                "idle": {
+                    frames: [0],
+                    speed: 0.1
+                },
+                "travel": {
+                    frames: [0, 1, 2, 3],
+                    speed: 0.1
+                }
             }
         });
         this.FOREST = new easeljs.SpriteSheet({
@@ -25914,7 +25922,14 @@ var SpriteAtlas = (function () {
                 regY: 8
             },
             animations: {
-                "idle": [0, 6, "idle", 0.1]
+                "idle": {
+                    frames: [0],
+                    speed: 0.1
+                },
+                "travel": {
+                    frames: [0, 1, 2, 3, 4, 5, 6],
+                    speed: 0.1
+                }
             }
         });
     }
@@ -25928,24 +25943,31 @@ var Game = (function () {
         var fish = new GoodType("Fish", "Produced in coastal villages, highly", "fish");
         var ingot = new GoodType("Ingot", "Produced in coastal villages, highly", "ingot");
         var wood = new GoodType("Wood", "Produced in coastal villages, highly", "wood");
+        var herbs = new GoodType("Herbs", "I really need to find a good description for this item", "herbs");
+        var potion = new GoodType("Potion", "Produced in coastal villages, highly", "potion");
+        var sword = new GoodType("Sword", "Produced in coastal villages, highly", "sword");
         var caravan = new TransportType("Caravan", spriteAtlas.WAIN);
         var boat = new TransportType("Boat", spriteAtlas.BOAT);
         var coastal = new CityType("Coastal", [fish], [ingot], spriteAtlas.COASTAL);
         var mountain = new CityType("Mountain", [ingot], [fish], spriteAtlas.MOUNTAIN);
         var alchemy = new CityType("Alchemy", [ingot], [wood], spriteAtlas.ALCHEMY);
         var cityType = new CityType("City", [ingot], [fish], spriteAtlas.CITY);
-        var city = new City("Del'Arrah", coastal, 280, 120);
-        var secondCity = new City("Keltos", mountain, 240, 420);
-        var thirdCity = new City("Kratop", alchemy, 420, 70);
-        var fourth = new City("Telesee", cityType, 200, 260);
-        this.goodTypes = [fish, ingot, wood];
+        var forge = new BuildingType("Forge", 100, [ingot], sword, 10);
+        var city = new City(this, "Del'Arrah", coastal, 140 * 2, 60 * 2);
+        var secondCity = new City(this, "Keltos", mountain, 120 * 2, 210 * 2);
+        var thirdCity = new City(this, "Kratop", alchemy, 210 * 2, 35 * 2);
+        var fourth = new City(this, "Telesee", cityType, 100 * 2, 130 * 2);
+        var fifth = new City(this, "Telesee", coastal, 170 * 2, 150 * 2);
+        this.goodTypes = [fish, ingot, wood, herbs, potion, sword];
         this.cityTypes = [coastal, mountain, alchemy, cityType];
-        this.cities = [city, secondCity, thirdCity, fourth];
+        this.cities = [city, secondCity, thirdCity, fourth, fifth];
         this.links = [
             new CityLink(fourth, city, caravan),
             new CityLink(city, thirdCity, boat),
-            new CityLink(secondCity, fourth, caravan)
+            new CityLink(secondCity, fourth, caravan),
+            new CityLink(secondCity, fifth, caravan)
         ];
+        this.buildingTypes = [forge];
     }
     Game.prototype.start = function () {
         var _this = this;
@@ -26018,7 +26040,7 @@ var Game = (function () {
         }
         var transport = new Transport(this, city, link);
         this.transports.push(transport);
-        transport.sprite = new easeljs.Sprite(link.type.spritesheet, "idle");
+        transport.sprite = new easeljs.Sprite(link.type.spritesheet);
         this.stage.addChild(transport.sprite);
         transport.sprite.cursor = "pointer";
         transport.sprite.scaleY = transport.sprite.scaleX = 2;
@@ -26046,6 +26068,7 @@ var Game = (function () {
             this.selectedCursor.x = this.selectedTransport.sprite.x;
             this.selectedCursor.y = this.selectedTransport.sprite.y;
         }
+        this.cities.forEach(function (c) { return c.update(delta); });
     };
     Game.prototype.neighbours = function (city) {
         return this.links.filter(function (l) { return l.other(city) != null; });
@@ -26055,6 +26078,9 @@ var Game = (function () {
 __decorate([
     mobx_1.observable
 ], Game.prototype, "money", void 0);
+__decorate([
+    mobx_1.observable
+], Game.prototype, "transports", void 0);
 __decorate([
     mobx_1.observable
 ], Game.prototype, "selectedCity", void 0);
@@ -26070,15 +26096,143 @@ var CityType = (function () {
     }
     return CityType;
 }());
+var GoodQuantity = (function () {
+    function GoodQuantity(good, quantity) {
+        this.good = good;
+        this.quantity = quantity;
+    }
+    return GoodQuantity;
+}());
+__decorate([
+    mobx_1.observable
+], GoodQuantity.prototype, "quantity", void 0);
+var BuildingType = (function () {
+    function BuildingType(name, price, ingredients, result, time) {
+        this.name = name;
+        this.price = price;
+        this.ingredients = ingredients;
+        this.result = result;
+        this.time = time;
+    }
+    return BuildingType;
+}());
+var Building = (function () {
+    function Building(city, type) {
+        this.city = city;
+        this.type = type;
+        this.working = false;
+        this.timeRemaining = 0;
+    }
+    Building.prototype.update = function (delta) {
+        if (this.working) {
+            this.timeRemaining -= delta;
+            if (this.timeRemaining < 0) {
+                this.city.inventory.addItem(this.type.result, 1);
+                this.working = false;
+            }
+        }
+        else {
+            this.tryStart();
+        }
+    };
+    Building.prototype.tryStart = function () {
+        var _this = this;
+        if (this.working) {
+            return;
+        }
+        if (this.type.ingredients.some(function (i) { return !_this.city.inventory.has(i, 1); })) {
+            return;
+        }
+        this.type.ingredients.forEach(function (i) { return _this.city.inventory.removeItem(i, 1); });
+        this.working = true;
+        this.timeRemaining = this.type.time;
+    };
+    return Building;
+}());
+__decorate([
+    mobx_1.observable
+], Building.prototype, "working", void 0);
+__decorate([
+    mobx_1.observable
+], Building.prototype, "timeRemaining", void 0);
+var Inventory = (function () {
+    function Inventory() {
+        this.items = [];
+    }
+    Inventory.prototype.addItem = function (good, quantity) {
+        if (quantity < 0) {
+            throw new Error("addItem: Trying to add negative quantity");
+        }
+        var itemQuantity = this.getItemQuantity(good);
+        if (itemQuantity == null) {
+            itemQuantity = new GoodQuantity(good, 0);
+            this.items.push(itemQuantity);
+        }
+        itemQuantity.quantity += quantity;
+        if (itemQuantity.quantity < 0) {
+            this.items.splice(this.items.indexOf(itemQuantity), 1);
+        }
+    };
+    Inventory.prototype.removeItem = function (good, quantity) {
+        if (quantity < 0) {
+            throw new Error("addItem: Trying to remove negative quantity");
+        }
+        var itemQuantity = this.getItemQuantity(good);
+        if (itemQuantity == null) {
+            return;
+        }
+        itemQuantity.quantity -= quantity;
+        if (itemQuantity.quantity <= 0) {
+            this.items.splice(this.items.indexOf(itemQuantity), 1);
+        }
+    };
+    Inventory.prototype.has = function (good, quantity) {
+        return this.getQuantity(good) >= quantity;
+    };
+    Inventory.prototype.getQuantity = function (good) {
+        var itemQuantity = this.getItemQuantity(good);
+        if (itemQuantity != null) {
+            return itemQuantity.quantity;
+        }
+        else {
+            return 0;
+        }
+    };
+    Inventory.prototype.isEmpty = function () {
+        return this.items.length == 0;
+    };
+    Inventory.prototype.getItemQuantity = function (item) {
+        return this.items.filter(function (iq) { return iq.good == item; })[0];
+    };
+    return Inventory;
+}());
+__decorate([
+    mobx_1.observable
+], Inventory.prototype, "items", void 0);
+exports.default = Inventory;
 var City = (function () {
-    function City(name, type, x, y) {
+    function City(game, name, type, x, y) {
+        this.game = game;
         this.name = name;
         this.type = type;
         this.x = x;
         this.y = y;
+        this.buildings = [];
+        this.inventory = new Inventory();
     }
+    City.prototype.getAvailableBuildings = function () {
+        return this.game.buildingTypes;
+    };
+    City.prototype.update = function (delta) {
+        this.buildings.map(function (b) {
+            b.update(delta);
+        });
+    };
     return City;
 }());
+__decorate([
+    mobx_1.observable
+], City.prototype, "buildings", void 0);
 var CityLink = (function () {
     function CityLink(firstCity, secondCity, type) {
         this.firstCity = firstCity;
@@ -26150,11 +26304,48 @@ var Transport = (function () {
         this.waitingTimeRemaining = 0.001;
     }
     Transport.prototype.update = function (delta) {
+        var _this = this;
         if (this.waitingTimeRemaining > 0) {
             // Waiting in a city
             this.waitingTimeRemaining -= delta;
             if (this.waitingTimeRemaining < 0) {
+                // We execute our orders
+                // This defines the order in which the orders will be carried out
+                var orderTypes = [TransportAction.SELL, TransportAction.DROP, TransportAction.BUY, TransportAction.TAKE];
+                orderTypes.forEach(function (orderType) {
+                    var orders = [];
+                    if (_this.link.firstCity == _this.location) {
+                        orders = _this.firstCityActions;
+                    }
+                    else {
+                        orders = _this.secondCityActions;
+                    }
+                    orders = orders.filter(function (o) { return o.action == orderType; });
+                    orders.forEach(function (o) {
+                        if (o.action == TransportAction.BUY) {
+                            _this.transportedGood = o.good;
+                        }
+                        else if (o.action == TransportAction.SELL) {
+                            _this.transportedGood = null;
+                            _this.game.money += 100;
+                        }
+                        else if (o.action == TransportAction.TAKE) {
+                            if (!_this.location.inventory.has(o.good, 1)) {
+                                return;
+                            }
+                            _this.location.inventory.removeItem(o.good, 1);
+                            _this.transportedGood = o.good;
+                        }
+                        else if (o.action == TransportAction.DROP) {
+                            if (_this.transportedGood != o.good) {
+                                return;
+                            }
+                            _this.location.inventory.addItem(o.good, 1);
+                        }
+                    });
+                });
                 // We go on our way
+                this.sprite.gotoAndPlay("travel");
                 this.offsetAroundCityX = 0;
                 this.advancement = 0;
             }
@@ -26165,6 +26356,7 @@ var Transport = (function () {
             if (this.advancement > 1) {
                 this.location = this.link.other(this.location);
                 this.waitingTimeRemaining = this.TIME_WAITING;
+                this.sprite.gotoAndPlay("idle");
             }
             // Making so that the transport faces the right direction
             if (this.location.x > this.link.other(this.location).x) {
@@ -26243,10 +26435,12 @@ var GoodComponent = (function (_super) {
     }
     GoodComponent.prototype.render = function () {
         var _this = this;
-        return (React.createElement(TooltipComponent_1.default, { tooltip: (React.createElement("div", { className: "tooltip" },
+        return (React.createElement(TooltipComponent_1.default, { tooltip: (React.createElement("div", { className: "box tooltip" },
                 React.createElement("div", { style: { fontSize: 16 } }, this.props.good.name),
-                React.createElement("div", null, this.props.good.description))) },
+                React.createElement("div", null, this.props.good.description),
+                this.props.addedTooltipText != undefined && (React.createElement("div", { style: { marginTop: 10 }, dangerouslySetInnerHTML: { __html: this.props.addedTooltipText } })))) },
             React.createElement("div", { className: cs({
+                    "crispy": true,
                     "good-slot": true,
                     "good-slot-hover": this.props.pointerHover
                 }), style: { position: "relative" }, onClick: function () { if (_this.props.onClick != null)
@@ -26256,8 +26450,8 @@ var GoodComponent = (function (_super) {
                         position: "absolute",
                         left: 0,
                         right: 0,
-                        marginLeft: 2,
-                        marginRight: 2,
+                        marginLeft: 4,
+                        marginRight: 4,
                         backgroundColor: "black",
                         paddingRight: 2,
                         paddingLeft: 2,
@@ -26280,40 +26474,82 @@ var GameApp = (function (_super) {
         var _this = this;
         var selectedCity = this.props.game.selectedCity;
         var selectedTransport = this.props.game.selectedTransport;
-        return (React.createElement("div", { style: { display: "flex" } },
-            React.createElement("canvas", { className: "crispy", ref: function (c) { return _this.canvas = c; }, width: 500, height: 500, style: {
-                    width: 500, height: 500, border: "1px solid white", marginRight: 10
-                } }),
-            React.createElement("div", { style: { width: 200 } },
-                React.createElement("div", { style: { fontSize: 16 } },
-                    this.props.game.money,
-                    " gold"),
-                React.createElement("hr", null),
-                selectedCity != null && (React.createElement("div", null,
-                    React.createElement("div", { className: "city-title" }, selectedCity.name),
-                    React.createElement("div", { className: "city-type" }, selectedCity.type.name),
+        return (React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex" } },
+                React.createElement("canvas", { className: "crispy", ref: function (c) { return _this.canvas = c; }, width: 500, height: 500, style: {
+                        width: 500, height: 500, border: "1px solid white", marginRight: 10
+                    } }),
+                React.createElement("div", { style: { width: 200 } },
+                    React.createElement("div", { style: { fontSize: 16 } },
+                        this.props.game.money,
+                        React.createElement("span", { className: "money-icon" })),
                     React.createElement("hr", null),
-                    "Selling",
-                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, selectedCity.type.sellingGoods.map(function (good) { return (React.createElement(GoodComponent, { good: good, pointerHover: false })); })),
-                    React.createElement("hr", null),
-                    "Buying",
-                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, selectedCity.type.buyingGoods.map(function (good) { return (React.createElement(GoodComponent, { good: good, pointerHover: false })); })),
-                    React.createElement("hr", null),
-                    this.props.game.neighbours(selectedCity).map(function (link) { return (React.createElement("button", { style: { width: "100%" }, onClick: function () { return _this.buyWain(link); } },
-                        "Buy a ",
-                        link.type.name,
-                        " (to ",
-                        link.other(selectedCity).name,
-                        ")")); }))),
-                selectedTransport != null && (React.createElement("div", null,
-                    React.createElement("hr", null),
-                    selectedTransport.link.firstCity.name,
-                    this.displayListGoods(selectedTransport, this.getGoodsToDisplayFirstCity(), selectedTransport.firstCityActions),
-                    React.createElement("hr", null),
-                    selectedTransport.link.secondCity.name,
-                    this.displayListGoods(selectedTransport, this.getGoodsToDisplaySecondCity(), selectedTransport.secondCityActions),
-                    React.createElement("hr", null),
-                    React.createElement("button", { style: { width: "100%" } }, "Sell wain"))))));
+                    selectedCity != null && (React.createElement("div", null,
+                        React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } },
+                            React.createElement("div", { style: { fontSize: 14 } }, selectedCity.name),
+                            React.createElement("div", { className: "city-type" }, selectedCity.type.name)),
+                        !selectedCity.inventory.isEmpty() && (React.createElement("div", null,
+                            "Warehouse",
+                            React.createElement("div", { className: "row-good" }, selectedCity.inventory.items.map(function (gq) { return (React.createElement(GoodComponent, { good: gq.good, text: gq.quantity.toString(), pointerHover: true })); })))),
+                        React.createElement("hr", null),
+                        "Selling",
+                        React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, selectedCity.type.sellingGoods.map(function (good) { return (React.createElement(GoodComponent, { good: good, pointerHover: false })); })),
+                        React.createElement("hr", null),
+                        "Buying",
+                        React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, selectedCity.type.buyingGoods.map(function (good) { return (React.createElement(GoodComponent, { good: good, pointerHover: false })); })),
+                        React.createElement("hr", null),
+                        this.props.game.neighbours(selectedCity).map(function (link) { return (React.createElement("button", { style: { width: "100%" }, onClick: function () { return _this.buyWain(link); } },
+                            "Buy a ",
+                            link.type.name,
+                            " (to ",
+                            link.other(selectedCity).name,
+                            ")",
+                            React.createElement("br", null),
+                            "1500",
+                            React.createElement("span", { className: "money-icon" }))); }),
+                        selectedCity.getAvailableBuildings().length > 0 && (React.createElement("div", null,
+                            React.createElement("hr", null),
+                            "Buildings",
+                            React.createElement("div", null, selectedCity.buildings.map(function (b) { return (React.createElement("div", { className: "box" },
+                                b.type.name,
+                                React.createElement("div", { style: { display: "flex", alignItems: "center" } },
+                                    b.type.ingredients.map(function (i) { return (React.createElement(GoodComponent, { good: i, pointerHover: false })); }),
+                                    b.working ? (React.createElement("div", null,
+                                        React.createElement("div", { className: "arrow-progress crispy", style: {
+                                                backgroundPosition: _this.getProgressBarX(Math.round(100 * (1 - b.timeRemaining / b.type.time))) + "px 0"
+                                            } }))) : (React.createElement("div", null,
+                                        React.createElement("div", { className: "arrow-progress crispy" }))),
+                                    React.createElement(GoodComponent, { good: b.type.result, pointerHover: false })))); })),
+                            React.createElement("div", null, selectedCity.getAvailableBuildings().map(function (bt) { return (React.createElement(TooltipComponent_1.default, { tooltip: (React.createElement("div", { className: "box tooltip" },
+                                    React.createElement("div", { style: { fontSize: 16 } }),
+                                    React.createElement("div", { style: { display: "flex", alignItems: "center" } },
+                                        bt.ingredients.map(function (i) { return (React.createElement(GoodComponent, { good: i, pointerHover: false })); }),
+                                        React.createElement("div", null, "->"),
+                                        React.createElement(GoodComponent, { good: bt.result, pointerHover: false })))) },
+                                React.createElement("button", { onClick: function () { return _this.buyBuilding(selectedCity, bt); }, style: { width: "100%", display: "flex", justifyContent: "space-between" } },
+                                    React.createElement("div", null,
+                                        "Buy a ",
+                                        bt.name),
+                                    React.createElement("div", null,
+                                        bt.price,
+                                        React.createElement("div", { className: "money-icon" }))))); })))))),
+                    selectedTransport != null && (React.createElement("div", null,
+                        React.createElement("hr", null),
+                        selectedTransport.link.firstCity.name,
+                        this.displayListGoods(selectedTransport, this.getGoodsToDisplayFirstCity(), selectedTransport.firstCityActions),
+                        React.createElement("hr", null),
+                        selectedTransport.link.secondCity.name,
+                        this.displayListGoods(selectedTransport, this.getGoodsToDisplaySecondCity(), selectedTransport.secondCityActions),
+                        React.createElement("hr", null),
+                        React.createElement("button", { style: { width: "100%" } },
+                            "Sell ",
+                            selectedTransport.link.type.name))))),
+            DEBUG && (React.createElement("div", { style: { marginTop: 10 } },
+                "Debug & cheats",
+                React.createElement("br", null),
+                "Spawn item",
+                selectedCity != null && (React.createElement("div", { className: "row-good" }, this.props.game.goodTypes.map(function (good) { return (React.createElement("div", { onClick: function () { return selectedCity.inventory.addItem(good, 1); } },
+                    React.createElement(GoodComponent, { good: good, pointerHover: true }))); })))))));
     };
     GameApp.prototype.displayListGoods = function (transport, goods, actions) {
         var _this = this;
@@ -26322,7 +26558,7 @@ var GameApp = (function (_super) {
             return (React.createElement("div", null,
                 React.createElement(GoodComponent, { good: good, onClick: function () {
                         _this.toggleGoodCity(good, actions);
-                    }, text: action != null ? _this.getActionText(action.action) : null, pointerHover: true })));
+                    }, text: action != null ? _this.getActionText(action.action) : null, pointerHover: true, addedTooltipText: action != null ? _this.getActionTooltip(action.action) : null })));
         })));
     };
     GameApp.prototype.getGoodsToDisplayFirstCity = function () {
@@ -26335,6 +26571,11 @@ var GameApp = (function (_super) {
     };
     GameApp.prototype.getAction = function (good, actions) {
         return actions.filter(function (a) { return a.good == good; })[0];
+    };
+    GameApp.prototype.getProgressBarX = function (percentage) {
+        var SIZE = 32;
+        var COUNT = 21;
+        return -SIZE * Math.round(COUNT * percentage / 100);
     };
     GameApp.prototype.getActionText = function (action) {
         switch (action) {
@@ -26349,6 +26590,28 @@ var GameApp = (function (_super) {
             default:
                 return "NONE";
         }
+    };
+    GameApp.prototype.getActionTooltip = function (action) {
+        var tt = "[Click] to change behaviour";
+        switch (action) {
+            case (TransportAction.BUY):
+                tt += "<br />Will buy this good in the town's market";
+                break;
+            case (TransportAction.DROP):
+                tt += "<br />Will drop this good in the town's warehouse";
+                break;
+            case (TransportAction.TAKE):
+                tt += "<br />Will take this good in the town's warehouse";
+                break;
+            case (TransportAction.SELL):
+                tt += "<br />Will sell this good in the town's market";
+                break;
+        }
+        return tt;
+    };
+    GameApp.prototype.buyBuilding = function (city, type) {
+        var building = new Building(city, type);
+        city.buildings.push(building);
     };
     GameApp.prototype.toggleGoodCity = function (good, actions) {
         var action = this.getAction(good, actions);
@@ -26377,6 +26640,9 @@ var GameApp = (function (_super) {
     };
     GameApp.prototype.update = function (delta) {
         this.props.game.update(delta);
+    };
+    GameApp.prototype.formatPercentage = function (perc) {
+        return perc < 10 ? "0" + perc.toString() : perc.toString();
     };
     GameApp.prototype.updateLoop = function () {
         var _this = this;
