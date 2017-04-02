@@ -25767,10 +25767,10 @@ var SpriteAtlas = (function () {
                 width: 16,
                 height: 16,
                 regX: 8,
-                regY: 4
+                regY: 8
             },
             animations: {
-                "idle": [0]
+                "idle": [0, 3, "idle", 0.1]
             }
         });
         this.FOREST = new easeljs.SpriteSheet({
@@ -25833,25 +25833,61 @@ var SpriteAtlas = (function () {
                 "idle": [0]
             }
         });
+        this.SELECTED_CITY = new easeljs.SpriteSheet({
+            images: [selectedCity],
+            frames: {
+                width: 64,
+                height: 64,
+                regX: 32,
+                regY: 32
+            },
+            animations: {
+                "idle": [0, 13, "idle", 0.1]
+            }
+        });
+        this.SELECTED_WAIN = new easeljs.SpriteSheet({
+            images: [selectedWain],
+            frames: {
+                width: 48,
+                height: 48,
+                regX: 24,
+                regY: 24
+            },
+            animations: {
+                "idle": [0, 13, "idle", 0.1]
+            }
+        });
+        this.BOAT = new easeljs.SpriteSheet({
+            images: [boatImage],
+            frames: {
+                width: 48,
+                height: 48,
+                regX: 24,
+                regY: 24
+            },
+            animations: {
+                "idle": [0, 13, "idle", 0.1]
+            }
+        });
     }
     return SpriteAtlas;
 }());
 var Game = (function () {
     function Game() {
-        this.RADIUS_OFFSET = 20;
+        this.RADIUS_OFFSET = 40;
         this.money = 1000;
         this.transports = [];
         var fish = new GoodType("Fish", "Produced in coastal villages, highly", "fish");
         var ingot = new GoodType("Ingot", "Produced in coastal villages, highly", "ingot");
         var wood = new GoodType("Wood", "Produced in coastal villages, highly", "wood");
-        var coastal = new CityType("Coastal", [fish], spriteAtlas.COASTAL);
-        var mountain = new CityType("Mountain", [ingot], spriteAtlas.MOUNTAIN);
-        var alchemy = new CityType("Alchemy", [ingot], spriteAtlas.ALCHEMY);
-        var cityType = new CityType("City", [ingot], spriteAtlas.CITY);
-        var city = new City("Del'Arrah", coastal, 140, 58);
-        var secondCity = new City("Keltos", coastal, 121, 213);
-        var thirdCity = new City("Kratop", alchemy, 209, 36);
-        var fourth = new City("Telesee", cityType, 100, 130);
+        var coastal = new CityType("Coastal", [fish], [ingot], spriteAtlas.COASTAL);
+        var mountain = new CityType("Mountain", [ingot], [fish], spriteAtlas.MOUNTAIN);
+        var alchemy = new CityType("Alchemy", [ingot], [wood], spriteAtlas.ALCHEMY);
+        var cityType = new CityType("City", [ingot], [fish], spriteAtlas.CITY);
+        var city = new City("Del'Arrah", coastal, 280, 120);
+        var secondCity = new City("Keltos", coastal, 240, 420);
+        var thirdCity = new City("Kratop", alchemy, 420, 70);
+        var fourth = new City("Telesee", cityType, 200, 260);
         this.goodTypes = [fish, ingot, wood];
         this.cityTypes = [coastal, mountain, alchemy, cityType];
         this.cities = [city, secondCity, thirdCity, fourth];
@@ -25864,19 +25900,32 @@ var Game = (function () {
     Game.prototype.start = function () {
         var _this = this;
         this.stage.enableMouseOver();
+        this.stage.snapToPixelEnabled = true;
+        this.stage.canvas.getContext("2d").imageSmoothingEnabled = false;
+        this.stage.canvas.getContext("2d").mozImageSmoothingEnabled = false;
+        this.stage.canvas.getContext("2d").oImageSmoothingEnabled = false;
+        this.stage.canvas.getContext("2d").webkitImageSmoothingEnabled = false;
         // We draw the world
         // Map behind
         var background = new easeljs.Bitmap(mapImage);
+        background.scaleX = background.scaleY = 2;
         this.stage.addChild(background);
         // Cities
         this.cities.forEach(function (city) {
             city.sprite = new easeljs.Sprite(city.type.spritesheet);
             city.sprite.cursor = "pointer";
+            city.sprite.mouseEnabled = true;
             city.sprite.x = city.x;
             city.sprite.y = city.y;
+            city.sprite.scaleX = city.sprite.scaleY = 2;
             city.sprite.gotoAndPlay("idle");
             city.sprite.addEventListener("click", function () {
                 _this.clearSelected();
+                _this.selectedCursor = new easeljs.Sprite(spriteAtlas.SELECTED_CITY, "idle");
+                _this.selectedCursor.x = city.x;
+                _this.selectedCursor.y = city.y;
+                _this.selectedCursor.scaleX = _this.selectedCursor.scaleY = 2;
+                _this.stage.addChild(_this.selectedCursor);
                 _this.selectedCity = city;
             });
             _this.stage.addChild(city.sprite);
@@ -25885,13 +25934,17 @@ var Game = (function () {
         // Drawing links
         this.links.forEach(function (link) {
             link.shape = new easeljs.Shape();
+            link.shape.snapToPixel = true;
             link.shape.x = link.shape.y = 0.5;
             var g = link.shape.graphics;
             var _a = _this.getOffsetLink(link), x = _a.x, y = _a.y, x2 = _a.x2, y2 = _a.y2;
             g.setStrokeStyle(1);
             g.beginStroke("black");
+            g.beginFill("white");
             g.moveTo(x, y);
             g.lineTo(x2, y2);
+            g.endFill();
+            g.endStroke();
             _this.stage.addChild(link.shape);
         });
     };
@@ -25902,34 +25955,47 @@ var Game = (function () {
         var y2 = link.secondCity.y;
         var angle = Math.atan2(y2 - y1, x2 - x1);
         return {
-            x: x1 + Math.cos(angle) * this.RADIUS_OFFSET,
-            y: y1 + Math.sin(angle) * this.RADIUS_OFFSET,
-            x2: x2 - Math.cos(angle) * this.RADIUS_OFFSET,
-            y2: y2 - Math.sin(angle) * this.RADIUS_OFFSET,
+            x: Math.round(x1 + Math.cos(angle) * this.RADIUS_OFFSET),
+            y: Math.round(y1 + Math.sin(angle) * this.RADIUS_OFFSET),
+            x2: Math.round(x2 - Math.cos(angle) * this.RADIUS_OFFSET),
+            y2: Math.round(y2 - Math.sin(angle) * this.RADIUS_OFFSET),
         };
     };
-    Game.prototype.buyWain = function (city) {
+    Game.prototype.buyWain = function (city, link) {
         var _this = this;
-        var tradeRoute = new TradeRoute();
-        tradeRoute.addCity(city);
-        tradeRoute.addCity(this.cities.filter(function (c) { return c != city; })[0]);
-        var transport = new Transport(this, city, tradeRoute);
+        if (link.other(city) == null) {
+            throw new Error(city.name + " is not part of (" + link.firstCity.name + ", " + link.secondCity.name + ")");
+        }
+        var transport = new Transport(this, city, link);
         this.transports.push(transport);
-        transport.sprite = new easeljs.Sprite(spriteAtlas.WAIN);
+        transport.sprite = new easeljs.Sprite(spriteAtlas.WAIN, "idle");
         this.stage.addChild(transport.sprite);
         transport.sprite.cursor = "pointer";
+        transport.sprite.scaleY = transport.sprite.scaleX = 2;
         transport.sprite.addEventListener("click", function () {
             _this.clearSelected();
+            _this.selectedCursor = new easeljs.Sprite(spriteAtlas.SELECTED_WAIN, "idle");
+            _this.selectedCursor.x = city.x;
+            _this.selectedCursor.y = city.y;
+            _this.selectedCursor.scaleX = _this.selectedCursor.scaleY = 2;
+            _this.stage.addChild(_this.selectedCursor);
             _this.selectedTransport = transport;
         });
     };
     Game.prototype.clearSelected = function () {
+        if (this.selectedCursor != null) {
+            this.stage.removeChild(this.selectedCursor);
+        }
         this.selectedCity = null;
         this.selectedTransport = null;
     };
     Game.prototype.update = function (delta) {
         this.stage.update();
         this.transports.forEach(function (t) { return t.update(delta); });
+        if (this.selectedTransport != null) {
+            this.selectedCursor.x = this.selectedTransport.sprite.x;
+            this.selectedCursor.y = this.selectedTransport.sprite.y;
+        }
     };
     Game.prototype.neighbours = function (city) {
         return this.links.filter(function (l) { return l.other(city) != null; });
@@ -25946,9 +26012,10 @@ __decorate([
     mobx_1.observable
 ], Game.prototype, "selectedTransport", void 0);
 var CityType = (function () {
-    function CityType(name, sellingGoods, spritesheet) {
+    function CityType(name, sellingGoods, buyingGoods, spritesheet) {
         this.name = name;
         this.sellingGoods = sellingGoods;
+        this.buyingGoods = buyingGoods;
         this.spritesheet = spritesheet;
     }
     return CityType;
@@ -25986,57 +26053,80 @@ var GoodType = (function () {
     }
     return GoodType;
 }());
+var TransportAction;
+(function (TransportAction) {
+    TransportAction[TransportAction["DROP"] = 0] = "DROP";
+    TransportAction[TransportAction["TAKE"] = 1] = "TAKE";
+    TransportAction[TransportAction["SELL"] = 2] = "SELL";
+    TransportAction[TransportAction["BUY"] = 3] = "BUY";
+})(TransportAction || (TransportAction = {}));
 var Transport = (function () {
-    function Transport(game, location, tradeRoute) {
+    function Transport(game, location, link) {
         this.game = game;
         this.location = location;
-        this.tradeRoute = tradeRoute;
-        this.SPEED = 20;
-        this.RADIUS_AROUND_CITY = 10;
+        this.link = link;
+        this.TIME_WAITING = 2;
+        this.SPEED = 50;
+        this.RADIUS_AROUND_CITY_MIN = 30;
+        this.RADIUS_AROUND_CITY_RANGE = 10;
         this.offsetAroundCityX = 0;
         this.offsetAroundCityY = 0;
-        this.currentStep = tradeRoute.waypoints[0];
+        this.waitingTimeRemaining = 0.001;
     }
     Transport.prototype.update = function (delta) {
-        if (this.takenLink == null) {
+        if (this.waitingTimeRemaining > 0) {
             // Waiting in a city
-            if (this.offsetAroundCityX == 0) {
-                this.offsetAroundCityX = Math.random() * this.RADIUS_AROUND_CITY;
-                this.offsetAroundCityY = Math.random() * this.RADIUS_AROUND_CITY;
-            }
-            this.sprite.x = this.location.x + this.offsetAroundCityX;
-            this.sprite.y = this.location.y + this.offsetAroundCityY;
-            // We try to find a next waypoint
-            if (this.tradeRoute.waypoints.length > 1) {
-                this.findNextWay();
+            this.waitingTimeRemaining -= delta;
+            if (this.waitingTimeRemaining < 0) {
+                // We go on our way
+                this.offsetAroundCityX = 0;
+                this.advancement = 0;
             }
         }
         else {
             // Taking the road~
-            var _a = this.game.getOffsetLink(this.takenLink), x = _a.x, y = _a.y, x2 = _a.x2, y2 = _a.y2;
-            var targetX = x + (x2 - x) * (this.takenLink.forward(this.location) ? this.advancement : 1 - this.advancement);
-            var targetY = y + (y2 - y) * (this.takenLink.forward(this.location) ? this.advancement : 1 - this.advancement);
-            this.sprite.x = Math.round(targetX);
-            this.sprite.y = Math.round(targetY);
-            this.advancement += delta * this.SPEED / this.takenLink.distance();
+            this.advancement += delta * this.SPEED / this.link.distance();
             if (this.advancement > 1) {
-                this.location = this.takenLink.other(this.location);
-                this.findNextWay();
+                this.location = this.link.other(this.location);
+                this.waitingTimeRemaining = this.TIME_WAITING;
+            }
+            // Making so that the transport faces the right direction
+            if (this.location.x > this.link.other(this.location).x) {
+                this.sprite.scaleX = -2;
+            }
+            else {
+                this.sprite.scaleX = 2;
             }
         }
+        var _a = this.getCoord(), x = _a.x, y = _a.y;
+        this.sprite.x = x;
+        this.sprite.y = y;
     };
-    Transport.prototype.findNextWay = function () {
-        var _this = this;
-        this.currentStep = this.tradeRoute.nextWaypoint(this.currentStep);
-        var neighbours = this.game.neighbours(this.location);
-        var link = neighbours.filter(function (l) { return l.other(_this.location) == _this.currentStep.city; })[0];
-        if (link == undefined) {
-            throw new Error(this.location.name + " not neighbour of " + this.currentStep.city.name);
+    Transport.prototype.getCoord = function () {
+        if (this.waitingTimeRemaining > 0) {
+            // Waiting in a city
+            if (this.offsetAroundCityX == 0) {
+                var angle = Math.random() * 360;
+                this.offsetAroundCityX = Math.sin(angle) * (this.RADIUS_AROUND_CITY_MIN + Math.random() * this.RADIUS_AROUND_CITY_RANGE);
+                this.offsetAroundCityY = Math.cos(angle) * (this.RADIUS_AROUND_CITY_MIN + Math.random() * this.RADIUS_AROUND_CITY_RANGE);
+            }
+            return {
+                x: this.location.x + this.offsetAroundCityX,
+                y: this.location.y + this.offsetAroundCityY
+            };
         }
-        this.takenLink = link;
-        this.advancement = 0;
-    };
-    Transport.prototype.onReachCity = function () {
+        else {
+            // Taking the road~
+            var _a = this.game.getOffsetLink(this.link), x = _a.x, y = _a.y, x2 = _a.x2, y2 = _a.y2;
+            var targetX = x + (x2 - x) * (this.link.forward(this.location) ? this.advancement : 1 - this.advancement);
+            var targetY = y + (y2 - y) * (this.link.forward(this.location) ? this.advancement : 1 - this.advancement);
+            targetX = Math.round(targetX);
+            targetY = Math.round(targetY);
+            return {
+                x: targetX,
+                y: targetY
+            };
+        }
     };
     return Transport;
 }());
@@ -26091,7 +26181,7 @@ var GameApp = (function (_super) {
         var selectedCity = this.props.game.selectedCity;
         var selectedTransport = this.props.game.selectedTransport;
         return (React.createElement("div", { style: { display: "flex" } },
-            React.createElement("canvas", { className: "crispy", ref: function (c) { return _this.canvas = c; }, width: 250, height: 250, style: {
+            React.createElement("canvas", { className: "crispy", ref: function (c) { return _this.canvas = c; }, width: 500, height: 500, style: {
                     width: 500, height: 500, border: "1px solid white", marginRight: 10
                 } }),
             React.createElement("div", { style: { width: 200 } },
@@ -26103,13 +26193,42 @@ var GameApp = (function (_super) {
                     React.createElement("div", { className: "city-title" }, selectedCity.name),
                     React.createElement("div", { className: "city-type" }, selectedCity.type.name),
                     React.createElement("hr", null),
+                    "Selling",
                     React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, selectedCity.type.sellingGoods.map(function (good) { return (React.createElement(GoodComponent, { good: good })); })),
                     React.createElement("hr", null),
-                    React.createElement("button", { style: { width: "100%" }, onClick: function () { return _this.buyWain(); } }, "Buy a wain"))),
+                    "Buying",
+                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, selectedCity.type.buyingGoods.map(function (good) { return (React.createElement(GoodComponent, { good: good })); })),
+                    React.createElement("hr", null),
+                    this.props.game.neighbours(selectedCity).map(function (link) { return (React.createElement("button", { style: { width: "100%" }, onClick: function () { return _this.buyWain(link); } },
+                        "Buy a wain (to ",
+                        link.other(selectedCity).name,
+                        ")")); }))),
                 selectedTransport != null && (React.createElement("div", null,
                     React.createElement("hr", null),
+                    selectedTransport.link.firstCity.name,
+                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, this.getGoodsToDisplayFirstCity().map(function (good) { return (React.createElement(GoodComponent, { good: good })); })),
+                    React.createElement("hr", null),
+                    selectedTransport.link.secondCity.name,
+                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, this.getGoodsToDisplaySecondCity().map(function (good) { return (React.createElement(GoodComponent, { good: good })); })),
                     React.createElement("hr", null),
                     React.createElement("button", { style: { width: "100%" } }, "Sell wain"))))));
+    };
+    GameApp.prototype.getGoodsToDisplayFirstCity = function () {
+        var link = this.props.game.selectedTransport.link;
+        return this.getGoodsToDisplay(link, link.firstCity);
+    };
+    GameApp.prototype.getGoodsToDisplaySecondCity = function () {
+        var link = this.props.game.selectedTransport.link;
+        return this.getGoodsToDisplay(link, link.secondCity);
+    };
+    GameApp.prototype.getGoodsToDisplay = function (link, city) {
+        var goods = [];
+        goods = goods.concat(city.type.sellingGoods);
+        goods = goods.concat(city.type.buyingGoods);
+        goods = goods.concat(link.other(city).type.sellingGoods);
+        goods = goods.concat(link.other(city).type.buyingGoods);
+        goods.filter(function (g, i) { return goods.indexOf(g) == i; });
+        return goods;
     };
     GameApp.prototype.update = function (delta) {
         this.props.game.update(delta);
@@ -26123,8 +26242,8 @@ var GameApp = (function (_super) {
             _this.update(delta / 1000);
         });
     };
-    GameApp.prototype.buyWain = function () {
-        this.props.game.buyWain(this.props.game.selectedCity);
+    GameApp.prototype.buyWain = function (link) {
+        this.props.game.buyWain(this.props.game.selectedCity, link);
     };
     GameApp.prototype.componentDidMount = function () {
         var stage = new easeljs.Stage(this.canvas);
@@ -26143,6 +26262,8 @@ var forestImage = new Image();
 forestImage.src = "assets/forest.png";
 var wainImage = new Image();
 wainImage.src = "assets/wain.png";
+var boatImage = new Image();
+boatImage.src = "assets/boat.png";
 var mapImage = new Image();
 mapImage.src = "assets/map.png";
 var alchemyImage = new Image();
@@ -26151,6 +26272,10 @@ var coastalImage = new Image();
 coastalImage.src = "assets/coastal.png";
 var cityImage = new Image();
 cityImage.src = "assets/city.png";
+var selectedCity = new Image();
+selectedCity.src = "assets/selected-city.png";
+var selectedWain = new Image();
+selectedWain.src = "assets/selected-wain.png";
 var spriteAtlas = new SpriteAtlas();
 var game = new Game();
 window["game"] = game;
