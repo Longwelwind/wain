@@ -5,6 +5,7 @@ import {observable} from "mobx";
 import {observer} from "mobx-react";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
+import * as cs from "react-classset";
 import TooltipComponent from "./TooltipComponent";
 
 class SpriteAtlas {
@@ -108,13 +109,13 @@ class SpriteAtlas {
 	readonly BOAT = new easeljs.SpriteSheet({
 		images: [boatImage],
 		frames: {
-			width: 48,
-			height: 48,
-			regX: 24,
-			regY: 24
+			width: 16,
+			height: 16,
+			regX: 8,
+			regY: 8
 		},
 		animations: {
-			"idle": [0, 13, "idle", 0.1]
+			"idle": [0, 6, "idle", 0.1]
 		}
 	});
 }
@@ -140,13 +141,16 @@ class Game {
 		let ingot = new GoodType("Ingot", "Produced in coastal villages, highly", "ingot");
 		let wood = new GoodType("Wood", "Produced in coastal villages, highly", "wood");
 
+		let caravan = new TransportType("Caravan", spriteAtlas.WAIN);
+		let boat = new TransportType("Boat", spriteAtlas.BOAT);
+
 		let coastal = new CityType("Coastal", [fish], [ingot], spriteAtlas.COASTAL);
 		let mountain = new CityType("Mountain", [ingot], [fish], spriteAtlas.MOUNTAIN);
 		let alchemy = new CityType("Alchemy", [ingot], [wood], spriteAtlas.ALCHEMY);
 		let cityType = new CityType("City", [ingot], [fish], spriteAtlas.CITY);
 
 		let city = new City("Del'Arrah", coastal, 280, 120);
-		let secondCity = new City("Keltos", coastal, 240, 420);
+		let secondCity = new City("Keltos", mountain, 240, 420);
 		let thirdCity = new City("Kratop", alchemy, 420, 70);
 		let fourth = new City("Telesee", cityType, 200, 260);
 
@@ -154,9 +158,9 @@ class Game {
 		this.cityTypes = [coastal, mountain, alchemy, cityType];
 		this.cities = [city, secondCity, thirdCity, fourth];
 		this.links = [
-			new CityLink(fourth, city),
-			new CityLink(city, thirdCity),
-			new CityLink(secondCity, fourth)
+			new CityLink(fourth, city, caravan),
+			new CityLink(city, thirdCity, boat),
+			new CityLink(secondCity, fourth, caravan)
 		];
 	}
 
@@ -237,7 +241,7 @@ class Game {
 		};
 	}
 
-	public buyWain(city: City, link: CityLink) {
+	public buyTransport(city: City, link: CityLink) {
 		if (link.other(city) == null) {
 			throw new Error(city.name + " is not part of (" + link.firstCity.name + ", " + link.secondCity.name + ")");
 		}
@@ -245,7 +249,7 @@ class Game {
 		let transport = new Transport(this, city, link);
 		this.transports.push(transport);
 
-		transport.sprite = new easeljs.Sprite(spriteAtlas.WAIN, "idle");
+		transport.sprite = new easeljs.Sprite(link.type.spritesheet, "idle");
 		this.stage.addChild(transport.sprite);
 		transport.sprite.cursor = "pointer";
 		transport.sprite.scaleY = transport.sprite.scaleX = 2;
@@ -305,7 +309,7 @@ class City {
 class CityLink {
 	public shape: easeljs.Shape;
 
-	constructor(public firstCity: City, public secondCity: City) {
+	constructor(public firstCity: City, public secondCity: City, public type: TransportType) {
 
 	}
 
@@ -335,6 +339,27 @@ enum TransportAction {
 	BUY
 }
 
+class CityAction {
+	static readonly TRANSPORT_ACTIONS = [
+		TransportAction.BUY,
+		TransportAction.SELL,
+		TransportAction.DROP,
+		TransportAction.TAKE
+	];
+
+	@observable action: TransportAction;
+
+	public constructor(public good: GoodType, action: TransportAction) {
+		this.action = action;
+	}
+}
+
+class TransportType {
+	public constructor(public name: string, public spritesheet: easeljs.SpriteSheet) {
+
+	}
+}
+
 class Transport {
 	readonly TIME_WAITING = 2;
 	readonly SPEED = 50;
@@ -345,12 +370,8 @@ class Transport {
 	public sprite: easeljs.Sprite;
 	public advancement: number;
 
-	public goodFirstCity: GoodType;
-	public actionFirstCity: TransportAction;
-	public actionFirstCityToSecond: TransportAction;
-	public goodSecondCity: GoodType;
-	public actionSecondCity: TransportAction;
-	public actionSecondCityToFirst: TransportAction;
+	@observable firstCityActions: CityAction[] = [];
+	@observable secondCityActions: CityAction[] = [];
 
 	public offsetAroundCityX = 0;
 	public offsetAroundCityY = 0;
@@ -451,6 +472,10 @@ interface GameAppProps {
 
 interface GoodComponentProps {
 	good: GoodType;
+	text?: string;
+	onClick?: () => void;
+	pointerHover: boolean;
+	addedTooltipText?: string;
 }
 
 @observer
@@ -465,11 +490,36 @@ class GoodComponent extends React.Component<GoodComponentProps, null> {
 					</div>
 				)}
 			>
-				<div className="good-slot">
+				<div
+					className={cs({
+						"good-slot": true,
+						"good-slot-hover": this.props.pointerHover
+					})}
+					style={{position: "relative"}}
+					onClick={() => { if (this.props.onClick != null) this.props.onClick() }}
+				>
 					<img
 						className="crispy"
 						width="32px"
 						src={"./assets/" + this.props.good.icon + ".png"} />
+					{this.props.text != null && (
+						<span style={{
+							position: "absolute",
+							left: 0,
+							right: 0,
+							marginLeft: 2,
+							marginRight: 2,
+							backgroundColor: "black",
+							paddingRight: 2,
+							paddingLeft: 2,
+							fontSize: 10,
+							top: 30,
+							textAlign: "center"
+						}}>
+							{this.props.text}
+						</span>
+					)}
+					
 				</div>
 			</TooltipComponent>
 		);
@@ -510,20 +560,20 @@ class GameApp extends React.Component<GameAppProps, null> {
 						Selling
 						<div style={{display: "flex", flexWrap: "wrap"}}>
 							{selectedCity.type.sellingGoods.map((good) => (
-								<GoodComponent good={good}/>
+								<GoodComponent good={good} pointerHover={false}/>
 							))}
 						</div>
 						<hr />
 						Buying
 						<div style={{display: "flex", flexWrap: "wrap"}}>
 							{selectedCity.type.buyingGoods.map((good) => (
-								<GoodComponent good={good}/>
+								<GoodComponent good={good} pointerHover={false}/>
 							))}
 						</div>
 						<hr />
 						{this.props.game.neighbours(selectedCity).map((link) => (
 						<button style={{width: "100%"}} onClick={() => this.buyWain(link)}>
-							Buy a wain (to {link.other(selectedCity).name})
+							Buy a {link.type.name} (to {link.other(selectedCity).name})
 						</button>
 						))}
 						
@@ -533,18 +583,18 @@ class GameApp extends React.Component<GameAppProps, null> {
 					<div>
 						<hr />
 						{selectedTransport.link.firstCity.name}
-						<div style={{display: "flex", flexWrap: "wrap"}}>
-							{this.getGoodsToDisplayFirstCity().map((good) => (
-							<GoodComponent good={good}/>
-							))}
-						</div>
+						{this.displayListGoods(
+							selectedTransport,
+							this.getGoodsToDisplayFirstCity(),
+							selectedTransport.firstCityActions
+						)}
 						<hr />
 						{selectedTransport.link.secondCity.name}
-						<div style={{display: "flex", flexWrap: "wrap"}}>
-							{this.getGoodsToDisplaySecondCity().map((good) => (
-							<GoodComponent good={good}/>
-							))}
-						</div>
+						{this.displayListGoods(
+							selectedTransport,
+							this.getGoodsToDisplaySecondCity(),
+							selectedTransport.secondCityActions
+						)}
 						<hr />
 						<button style={{width: "100%"}}>
 							Sell wain
@@ -552,6 +602,28 @@ class GameApp extends React.Component<GameAppProps, null> {
 					</div>
 					)}
 				</div>
+			</div>
+		);
+	}
+
+	private displayListGoods(transport: Transport, goods: GoodType[], actions: CityAction[]) {
+		return (
+			<div style={{display: "flex", flexWrap: "wrap"}}>
+				{goods.map((good) => {
+					let action = this.getAction(good, actions);
+					return (
+					<div>
+						<GoodComponent
+							good={good}
+							onClick={() => { 
+								this.toggleGoodCity(good, actions)
+							}}
+							text={action != null ? this.getActionText(action.action) : null}
+							pointerHover={true}
+						/>
+					</div>
+					)
+				})}
 			</div>
 		);
 	}
@@ -566,6 +638,41 @@ class GameApp extends React.Component<GameAppProps, null> {
 		return this.getGoodsToDisplay(link, link.secondCity);
 	}
 
+	private getAction(good: GoodType, actions: CityAction[]): CityAction {
+		return actions.filter((a) => a.good == good)[0];
+	}
+
+	private getActionText(action: TransportAction): string {
+		switch (action) {
+			case (TransportAction.BUY):
+				return "BUY";
+			case (TransportAction.DROP):
+				return "DROP";
+			case (TransportAction.TAKE):
+				return "TAKE";
+			case (TransportAction.SELL):
+				return "SELL";
+			default:
+				return "NONE";
+		}
+	}
+
+	private toggleGoodCity(good: GoodType, actions: CityAction[]) {
+		let action = this.getAction(good, actions);
+		if (action == null) {
+			action = new CityAction(good, CityAction.TRANSPORT_ACTIONS[0]);
+			actions.push(action);
+		} else {
+			let i = CityAction.TRANSPORT_ACTIONS.indexOf(action.action) + 1;
+			if (i == CityAction.TRANSPORT_ACTIONS.length) {
+				actions.splice(actions.indexOf(action), 1);
+			} else {
+				action.action = CityAction.TRANSPORT_ACTIONS[i];
+			}
+			
+		}
+	}
+
 	private getGoodsToDisplay(link: CityLink, city: City): GoodType[] {
 		let goods = [];
 
@@ -573,7 +680,7 @@ class GameApp extends React.Component<GameAppProps, null> {
 		goods = goods.concat(city.type.buyingGoods);
 		goods = goods.concat(link.other(city).type.sellingGoods);
 		goods = goods.concat(link.other(city).type.buyingGoods);
-		goods.filter((g, i) => goods.indexOf(g) == i);
+		goods = goods.filter((g, i) => goods.indexOf(g) == i);
 
 		return goods;
 	}
@@ -593,7 +700,7 @@ class GameApp extends React.Component<GameAppProps, null> {
 	}
 
 	private buyWain(link: CityLink) {
-		this.props.game.buyWain(this.props.game.selectedCity, link);
+		this.props.game.buyTransport(this.props.game.selectedCity, link);
 	}
 
 	componentDidMount() {

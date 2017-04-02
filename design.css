@@ -49,8 +49,13 @@ button:hover {
 	display: flex;
 	justify-content: center;
 	align-items: center;
-	border: 1px solid white;
 	padding: 2px;
+	background-image: url("assets/good-slot.png");
+	background-size: 100%;
+}
+
+.good-slot-hover:hover {
+	cursor: pointer;
 }
 
 .crispy {
