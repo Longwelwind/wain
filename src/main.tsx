@@ -8,6 +8,8 @@ import * as ReactDOM from "react-dom";
 import * as cs from "react-classset";
 import TooltipComponent from "./TooltipComponent";
 
+import City from "./City";
+
 const DEBUG = true;
 
 class SpriteAtlas {
@@ -136,7 +138,7 @@ class SpriteAtlas {
 	});
 }
 
-class Game {
+export class Game {
 	readonly RADIUS_OFFSET = 40;
 
 	@observable money: number = 1000;
@@ -165,10 +167,26 @@ class Game {
 		let caravan = new TransportType("Caravan", spriteAtlas.WAIN);
 		let boat = new TransportType("Boat", spriteAtlas.BOAT);
 
-		let coastal = new CityType("Coastal", [fish], [ingot], spriteAtlas.COASTAL);
-		let mountain = new CityType("Mountain", [ingot], [fish], spriteAtlas.MOUNTAIN);
-		let alchemy = new CityType("Alchemy", [ingot], [wood], spriteAtlas.ALCHEMY);
-		let cityType = new CityType("City", [ingot], [fish], spriteAtlas.CITY);
+		let coastal = new CityType("Coastal", [
+			new GoodOffer(fish, 40)
+		], [
+			new GoodOffer(ingot, 20)
+		], spriteAtlas.COASTAL);
+		let mountain = new CityType("Mountain", [
+			new GoodOffer(ingot, 40)
+		], [
+			new GoodOffer(fish, 30)
+		], spriteAtlas.MOUNTAIN);
+		let alchemy = new CityType("Alchemy", [
+			new GoodOffer(ingot, 10)
+		], [
+			new GoodOffer(wood, 5)
+		], spriteAtlas.ALCHEMY);
+		let cityType = new CityType("City", [
+			new GoodOffer(ingot, 5)
+		], [
+			new GoodOffer(fish, 4)
+		], spriteAtlas.CITY);
 
 		let forge = new BuildingType("Forge", 100, [ingot], sword, 10);
 
@@ -321,13 +339,19 @@ class Game {
 	}
 }
 
-class CityType {
-	constructor(public name: string, public sellingGoods: GoodType[], public buyingGoods: GoodType[], public spritesheet: easeljs.SpriteSheet) {
+export class GoodOffer {
+	public constructor(public good: GoodType, public price: number) {
 
 	}
 }
 
-class GoodQuantity {
+export class CityType {
+	constructor(public name: string, public sellingGoods: GoodOffer[], public buyingGoods: GoodOffer[], public spritesheet: easeljs.SpriteSheet) {
+
+	}
+}
+
+export class GoodQuantity {
 	@observable quantity: number;
 
 	constructor(public good: GoodType, quantity: number) {
@@ -335,13 +359,25 @@ class GoodQuantity {
 	}
 }
 
-class BuildingType {
+export class BuildingType {
 	public constructor(public name: string, public price: number, public ingredients: GoodType[], public result: GoodType, public time: number) {
 
 	}
 }
 
-class Building {
+export class CityUpgrade {
+	public constructor(
+		public price: number,
+		public buyingOffers: GoodOffer[],
+		public sellOffers: GoodOffer[],
+		public transportTypes: TransportType[],
+		public buildingTypes: BuildingType[]
+	) {
+
+	}
+}
+
+export class Building {
 	@observable working: boolean = false;
 	@observable timeRemaining: number = 0;
 
@@ -378,7 +414,7 @@ class Building {
 	}
 }
 
-export default class Inventory {
+export class Inventory {
 	@observable items: GoodQuantity[] = [];
 
 	public addItem(good: GoodType, quantity: number) {
@@ -438,26 +474,6 @@ export default class Inventory {
 	}
 }
 
-class City {
-	sprite: easeljs.Sprite;
-	@observable buildings: Building[] = [];
-	inventory: Inventory = new Inventory();
-
-	constructor(public game: Game, public name: string, public type: CityType, public x: number, public y: number) {
-		
-	}
-
-	getAvailableBuildings(): BuildingType[] {
-		return this.game.buildingTypes;
-	}
-
-	update(delta: number) {
-		this.buildings.map((b) => {
-			b.update(delta);
-		});
-	}
-}
-
 class CityLink {
 	public shape: easeljs.Shape;
 
@@ -478,7 +494,7 @@ class CityLink {
 	}
 }
 
-class GoodType {
+export class GoodType {
 	constructor(public name: string, public description: string, public icon: string) {
 
 	}
@@ -499,10 +515,10 @@ class CityAction {
 		TransportAction.TAKE
 	];
 
-	@observable action: TransportAction;
+	@observable transportAction: TransportAction;
 
 	public constructor(public good: GoodType, action: TransportAction) {
-		this.action = action;
+		this.transportAction = action;
 	}
 }
 
@@ -550,21 +566,36 @@ class Transport {
 						orders = this.secondCityActions;
 					}
 
-					orders = orders.filter((o) => o.action == orderType);
+					orders = orders.filter((o) => o.transportAction == orderType);
 
 					orders.forEach((o) => {
-						if (o.action == TransportAction.BUY) {
+						if (o.transportAction == TransportAction.BUY) {
+							let offer = this.location.type.buyingGoods.filter((offer) =>
+								offer.good == o.good
+							)[0];
+							if (offer == null) {
+								return;
+							}
+
 							this.transportedGood = o.good;
-						} else if (o.action == TransportAction.SELL) {
+							this.game.money -= offer.price;
+						} else if (o.transportAction == TransportAction.SELL) {
+							let offer = this.location.type.sellingGoods.filter((offer) =>
+								offer.good == o.good
+							)[0];
+							if (offer == null) {
+								return;
+							}
+
 							this.transportedGood = null;
-							this.game.money += 100;
-						} else if (o.action == TransportAction.TAKE) {
+							this.game.money += offer.price;
+						} else if (o.transportAction == TransportAction.TAKE) {
 							if (!this.location.inventory.has(o.good, 1)) {
 								return;
 							}
 							this.location.inventory.removeItem(o.good, 1);
 							this.transportedGood = o.good;
-						} else if (o.action == TransportAction.DROP) {
+						} else if (o.transportAction == TransportAction.DROP) {
 							if (this.transportedGood != o.good) {
 								return;
 							}
@@ -768,22 +799,30 @@ class GameApp extends React.Component<GameAppProps, null> {
 						)}
 						<hr />
 						Selling
-						<div style={{display: "flex", flexWrap: "wrap"}}>
-							{selectedCity.type.sellingGoods.map((good) => (
-								<GoodComponent good={good} pointerHover={false}/>
+						<div className="row-good">
+							{selectedCity.type.sellingGoods.map((goodOffer) => (
+								<GoodComponent
+									good={goodOffer.good}
+									text={goodOffer.price.toString()}
+									addedTooltipText={"This town buys " + goodOffer.good.name + " for " + goodOffer.price.toString() + "g."}
+									pointerHover={false}/>
 							))}
 						</div>
 						<hr />
 						Buying
-						<div style={{display: "flex", flexWrap: "wrap"}}>
-							{selectedCity.type.buyingGoods.map((good) => (
-								<GoodComponent good={good} pointerHover={false}/>
+						<div className="row-good">
+							{selectedCity.type.buyingGoods.map((goodOffer) => (
+								<GoodComponent
+									good={goodOffer.good}
+									text={goodOffer.price.toString()}
+									addedTooltipText={"This town buys " + goodOffer.good.name + " for " + goodOffer.price.toString() + "g."}
+									pointerHover={false}/>
 							))}
 						</div>
 						<hr />
 						{this.props.game.neighbours(selectedCity).map((link) => (
 						<button style={{width: "100%"}} onClick={() => this.buyWain(link)}>
-							Buy a {link.type.name} (to {link.other(selectedCity).name})<br />
+							{link.type.name} to {link.other(selectedCity).name}<br />
 							1500<span className="money-icon"></span>
 						</button>
 						))}
@@ -796,12 +835,14 @@ class GameApp extends React.Component<GameAppProps, null> {
 										<div className="box">
 											{b.type.name}
 											<div style={{display: "flex", alignItems: "center"}}>
-												{b.type.ingredients.map((i) => (
-													<GoodComponent
-														good={i}
-														pointerHover={false}
-													/>
-												))}
+												<div className="row-good">
+													{b.type.ingredients.map((i) => (
+														<GoodComponent
+															good={i}
+															pointerHover={false}
+														/>
+													))}
+												</div>
 												{b.working ? (
 													<div>
 														<div
@@ -833,12 +874,14 @@ class GameApp extends React.Component<GameAppProps, null> {
 												<div className="box tooltip">
 													<div style={{fontSize: 16}}></div>
 													<div style={{display: "flex", alignItems: "center"}}>
-														{bt.ingredients.map((i) => (
-															<GoodComponent
-																good={i}
-																pointerHover={false}
-															/>
-														))}
+														<div className="row-good">
+															{bt.ingredients.map((i) => (
+																<GoodComponent
+																	good={i}
+																	pointerHover={false}
+																/>
+															))}
+														</div>
 														<div>
 															->
 														</div>
@@ -875,14 +918,16 @@ class GameApp extends React.Component<GameAppProps, null> {
 						{this.displayListGoods(
 							selectedTransport,
 							this.getGoodsToDisplayFirstCity(),
-							selectedTransport.firstCityActions
+							selectedTransport.firstCityActions,
+							selectedTransport.link.firstCity
 						)}
 						<hr />
 						{selectedTransport.link.secondCity.name}
 						{this.displayListGoods(
 							selectedTransport,
 							this.getGoodsToDisplaySecondCity(),
-							selectedTransport.secondCityActions
+							selectedTransport.secondCityActions,
+							selectedTransport.link.secondCity
 						)}
 						<hr />
 						<button style={{width: "100%"}}>
@@ -914,9 +959,9 @@ class GameApp extends React.Component<GameAppProps, null> {
 		);
 	}
 
-	private displayListGoods(transport: Transport, goods: GoodType[], actions: CityAction[]) {
+	private displayListGoods(transport: Transport, goods: GoodType[], actions: CityAction[], city: City) {
 		return (
-			<div style={{display: "flex", flexWrap: "wrap"}}>
+			<div className="row-good">
 				{goods.map((good) => {
 					let action = this.getAction(good, actions);
 					return (
@@ -924,11 +969,11 @@ class GameApp extends React.Component<GameAppProps, null> {
 						<GoodComponent
 							good={good}
 							onClick={() => { 
-								this.toggleGoodCity(good, actions)
+								this.toggleGoodCity(good, actions, city)
 							}}
-							text={action != null ? this.getActionText(action.action) : null}
+							text={action != null ? this.getActionText(action.transportAction) : null}
 							pointerHover={true}
-							addedTooltipText={action != null ? this.getActionTooltip(action.action) : null}
+							addedTooltipText={action != null ? this.getActionTooltip(action.transportAction) : null}
 						/>
 					</div>
 					)
@@ -997,28 +1042,52 @@ class GameApp extends React.Component<GameAppProps, null> {
 		city.buildings.push(building);
 	}
 
-	private toggleGoodCity(good: GoodType, actions: CityAction[]) {
+	private toggleGoodCity(good: GoodType, actions: CityAction[], city: City) {
 		let action = this.getAction(good, actions);
+		let newAction = false;
 		if (action == null) {
 			action = new CityAction(good, CityAction.TRANSPORT_ACTIONS[0]);
+			newAction = true;
 			actions.push(action);
-		} else {
-			let i = CityAction.TRANSPORT_ACTIONS.indexOf(action.action) + 1;
-			if (i == CityAction.TRANSPORT_ACTIONS.length) {
-				actions.splice(actions.indexOf(action), 1);
-			} else {
-				action.action = CityAction.TRANSPORT_ACTIONS[i];
+		}
+
+		// If it's a new action, we must then do the check for i
+		// If it's not, we must only check for i+1
+		let i = CityAction.TRANSPORT_ACTIONS.indexOf(action.transportAction) + (newAction ? 0 : 1);
+		let found = false;
+		while (!found && i != CityAction.TRANSPORT_ACTIONS.length) {
+			let possibleTransportAction = CityAction.TRANSPORT_ACTIONS[i];
+
+			// Is this action acceptable ?
+			if (possibleTransportAction == TransportAction.BUY) {
+				if (!city.canBuy(good)) {
+					i++;
+					continue;
+				}
+				
+			} else if (possibleTransportAction == TransportAction.SELL) {
+				if (!city.canSell(good)) {
+					i++;
+					continue;
+				}
 			}
+
+			action.transportAction = possibleTransportAction;
+			found = true;
+		}
+		
+		if (!found) {
+			actions.splice(actions.indexOf(action), 1);
 		}
 	}
 
 	private getGoodsToDisplay(link: CityLink, city: City): GoodType[] {
-		let goods = [];
+		let goods: GoodType[] = [];
 
-		goods = goods.concat(city.type.sellingGoods);
-		goods = goods.concat(city.type.buyingGoods);
-		goods = goods.concat(link.other(city).type.sellingGoods);
-		goods = goods.concat(link.other(city).type.buyingGoods);
+		goods = goods.concat(city.type.sellingGoods.map((o) => o.good));
+		goods = goods.concat(city.type.buyingGoods.map((o) => o.good));
+		goods = goods.concat(link.other(city).type.sellingGoods.map((o) => o.good));
+		goods = goods.concat(link.other(city).type.buyingGoods.map((o) => o.good));
 		goods = goods.filter((g, i) => goods.indexOf(g) == i);
 
 		return goods;

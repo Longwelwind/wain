@@ -25807,6 +25807,7 @@ var React = __webpack_require__(32);
 var ReactDOM = __webpack_require__(55);
 var cs = __webpack_require__(83);
 var TooltipComponent_1 = __webpack_require__(84);
+var City_1 = __webpack_require__(184);
 var DEBUG = true;
 var SpriteAtlas = (function () {
     function SpriteAtlas() {
@@ -25948,16 +25949,32 @@ var Game = (function () {
         var sword = new GoodType("Sword", "Produced in coastal villages, highly", "sword");
         var caravan = new TransportType("Caravan", spriteAtlas.WAIN);
         var boat = new TransportType("Boat", spriteAtlas.BOAT);
-        var coastal = new CityType("Coastal", [fish], [ingot], spriteAtlas.COASTAL);
-        var mountain = new CityType("Mountain", [ingot], [fish], spriteAtlas.MOUNTAIN);
-        var alchemy = new CityType("Alchemy", [ingot], [wood], spriteAtlas.ALCHEMY);
-        var cityType = new CityType("City", [ingot], [fish], spriteAtlas.CITY);
+        var coastal = new CityType("Coastal", [
+            new GoodOffer(fish, 40)
+        ], [
+            new GoodOffer(ingot, 20)
+        ], spriteAtlas.COASTAL);
+        var mountain = new CityType("Mountain", [
+            new GoodOffer(ingot, 40)
+        ], [
+            new GoodOffer(fish, 30)
+        ], spriteAtlas.MOUNTAIN);
+        var alchemy = new CityType("Alchemy", [
+            new GoodOffer(ingot, 10)
+        ], [
+            new GoodOffer(wood, 5)
+        ], spriteAtlas.ALCHEMY);
+        var cityType = new CityType("City", [
+            new GoodOffer(ingot, 5)
+        ], [
+            new GoodOffer(fish, 4)
+        ], spriteAtlas.CITY);
         var forge = new BuildingType("Forge", 100, [ingot], sword, 10);
-        var city = new City(this, "Del'Arrah", coastal, 140 * 2, 60 * 2);
-        var secondCity = new City(this, "Keltos", mountain, 120 * 2, 210 * 2);
-        var thirdCity = new City(this, "Kratop", alchemy, 210 * 2, 35 * 2);
-        var fourth = new City(this, "Telesee", cityType, 100 * 2, 130 * 2);
-        var fifth = new City(this, "Telesee", coastal, 170 * 2, 150 * 2);
+        var city = new City_1.default(this, "Del'Arrah", coastal, 140 * 2, 60 * 2);
+        var secondCity = new City_1.default(this, "Keltos", mountain, 120 * 2, 210 * 2);
+        var thirdCity = new City_1.default(this, "Kratop", alchemy, 210 * 2, 35 * 2);
+        var fourth = new City_1.default(this, "Telesee", cityType, 100 * 2, 130 * 2);
+        var fifth = new City_1.default(this, "Telesee", coastal, 170 * 2, 150 * 2);
         this.goodTypes = [fish, ingot, wood, herbs, potion, sword];
         this.cityTypes = [coastal, mountain, alchemy, cityType];
         this.cities = [city, secondCity, thirdCity, fourth, fifth];
@@ -26063,6 +26080,7 @@ var Game = (function () {
     };
     Game.prototype.update = function (delta) {
         this.stage.update();
+        this.timeElapsed += delta;
         this.transports.forEach(function (t) { return t.update(delta); });
         if (this.selectedTransport != null) {
             this.selectedCursor.x = this.selectedTransport.sprite.x;
@@ -26087,6 +26105,15 @@ __decorate([
 __decorate([
     mobx_1.observable
 ], Game.prototype, "selectedTransport", void 0);
+exports.Game = Game;
+var GoodOffer = (function () {
+    function GoodOffer(good, price) {
+        this.good = good;
+        this.price = price;
+    }
+    return GoodOffer;
+}());
+exports.GoodOffer = GoodOffer;
 var CityType = (function () {
     function CityType(name, sellingGoods, buyingGoods, spritesheet) {
         this.name = name;
@@ -26096,6 +26123,7 @@ var CityType = (function () {
     }
     return CityType;
 }());
+exports.CityType = CityType;
 var GoodQuantity = (function () {
     function GoodQuantity(good, quantity) {
         this.good = good;
@@ -26106,6 +26134,7 @@ var GoodQuantity = (function () {
 __decorate([
     mobx_1.observable
 ], GoodQuantity.prototype, "quantity", void 0);
+exports.GoodQuantity = GoodQuantity;
 var BuildingType = (function () {
     function BuildingType(name, price, ingredients, result, time) {
         this.name = name;
@@ -26116,6 +26145,18 @@ var BuildingType = (function () {
     }
     return BuildingType;
 }());
+exports.BuildingType = BuildingType;
+var CityUpgrade = (function () {
+    function CityUpgrade(price, buyingOffers, sellOffers, transportTypes, buildingTypes) {
+        this.price = price;
+        this.buyingOffers = buyingOffers;
+        this.sellOffers = sellOffers;
+        this.transportTypes = transportTypes;
+        this.buildingTypes = buildingTypes;
+    }
+    return CityUpgrade;
+}());
+exports.CityUpgrade = CityUpgrade;
 var Building = (function () {
     function Building(city, type) {
         this.city = city;
@@ -26155,6 +26196,7 @@ __decorate([
 __decorate([
     mobx_1.observable
 ], Building.prototype, "timeRemaining", void 0);
+exports.Building = Building;
 var Inventory = (function () {
     function Inventory() {
         this.items = [];
@@ -26209,30 +26251,7 @@ var Inventory = (function () {
 __decorate([
     mobx_1.observable
 ], Inventory.prototype, "items", void 0);
-exports.default = Inventory;
-var City = (function () {
-    function City(game, name, type, x, y) {
-        this.game = game;
-        this.name = name;
-        this.type = type;
-        this.x = x;
-        this.y = y;
-        this.buildings = [];
-        this.inventory = new Inventory();
-    }
-    City.prototype.getAvailableBuildings = function () {
-        return this.game.buildingTypes;
-    };
-    City.prototype.update = function (delta) {
-        this.buildings.map(function (b) {
-            b.update(delta);
-        });
-    };
-    return City;
-}());
-__decorate([
-    mobx_1.observable
-], City.prototype, "buildings", void 0);
+exports.Inventory = Inventory;
 var CityLink = (function () {
     function CityLink(firstCity, secondCity, type) {
         this.firstCity = firstCity;
@@ -26258,6 +26277,7 @@ var GoodType = (function () {
     }
     return GoodType;
 }());
+exports.GoodType = GoodType;
 var TransportAction;
 (function (TransportAction) {
     TransportAction[TransportAction["DROP"] = 0] = "DROP";
@@ -26268,7 +26288,7 @@ var TransportAction;
 var CityAction = (function () {
     function CityAction(good, action) {
         this.good = good;
-        this.action = action;
+        this.transportAction = action;
     }
     return CityAction;
 }());
@@ -26280,7 +26300,7 @@ CityAction.TRANSPORT_ACTIONS = [
 ];
 __decorate([
     mobx_1.observable
-], CityAction.prototype, "action", void 0);
+], CityAction.prototype, "transportAction", void 0);
 var TransportType = (function () {
     function TransportType(name, spritesheet) {
         this.name = name;
@@ -26320,23 +26340,36 @@ var Transport = (function () {
                     else {
                         orders = _this.secondCityActions;
                     }
-                    orders = orders.filter(function (o) { return o.action == orderType; });
+                    orders = orders.filter(function (o) { return o.transportAction == orderType; });
                     orders.forEach(function (o) {
-                        if (o.action == TransportAction.BUY) {
+                        if (o.transportAction == TransportAction.BUY) {
+                            var offer = _this.location.type.buyingGoods.filter(function (offer) {
+                                return offer.good == o.good;
+                            })[0];
+                            if (offer == null) {
+                                return;
+                            }
                             _this.transportedGood = o.good;
+                            _this.game.money -= offer.price;
                         }
-                        else if (o.action == TransportAction.SELL) {
+                        else if (o.transportAction == TransportAction.SELL) {
+                            var offer = _this.location.type.sellingGoods.filter(function (offer) {
+                                return offer.good == o.good;
+                            })[0];
+                            if (offer == null) {
+                                return;
+                            }
                             _this.transportedGood = null;
-                            _this.game.money += 100;
+                            _this.game.money += offer.price;
                         }
-                        else if (o.action == TransportAction.TAKE) {
+                        else if (o.transportAction == TransportAction.TAKE) {
                             if (!_this.location.inventory.has(o.good, 1)) {
                                 return;
                             }
                             _this.location.inventory.removeItem(o.good, 1);
                             _this.transportedGood = o.good;
                         }
-                        else if (o.action == TransportAction.DROP) {
+                        else if (o.transportAction == TransportAction.DROP) {
                             if (_this.transportedGood != o.good) {
                                 return;
                             }
@@ -26493,17 +26526,15 @@ var GameApp = (function (_super) {
                             React.createElement("div", { className: "row-good" }, selectedCity.inventory.items.map(function (gq) { return (React.createElement(GoodComponent, { good: gq.good, text: gq.quantity.toString(), pointerHover: true })); })))),
                         React.createElement("hr", null),
                         "Selling",
-                        React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, selectedCity.type.sellingGoods.map(function (good) { return (React.createElement(GoodComponent, { good: good, pointerHover: false })); })),
+                        React.createElement("div", { className: "row-good" }, selectedCity.type.sellingGoods.map(function (goodOffer) { return (React.createElement(GoodComponent, { good: goodOffer.good, text: goodOffer.price.toString(), addedTooltipText: "This town buys " + goodOffer.good.name + " for " + goodOffer.price.toString() + "g.", pointerHover: false })); })),
                         React.createElement("hr", null),
                         "Buying",
-                        React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, selectedCity.type.buyingGoods.map(function (good) { return (React.createElement(GoodComponent, { good: good, pointerHover: false })); })),
+                        React.createElement("div", { className: "row-good" }, selectedCity.type.buyingGoods.map(function (goodOffer) { return (React.createElement(GoodComponent, { good: goodOffer.good, text: goodOffer.price.toString(), addedTooltipText: "This town buys " + goodOffer.good.name + " for " + goodOffer.price.toString() + "g.", pointerHover: false })); })),
                         React.createElement("hr", null),
                         this.props.game.neighbours(selectedCity).map(function (link) { return (React.createElement("button", { style: { width: "100%" }, onClick: function () { return _this.buyWain(link); } },
-                            "Buy a ",
                             link.type.name,
-                            " (to ",
+                            " to ",
                             link.other(selectedCity).name,
-                            ")",
                             React.createElement("br", null),
                             "1500",
                             React.createElement("span", { className: "money-icon" }))); }),
@@ -26513,7 +26544,7 @@ var GameApp = (function (_super) {
                             React.createElement("div", null, selectedCity.buildings.map(function (b) { return (React.createElement("div", { className: "box" },
                                 b.type.name,
                                 React.createElement("div", { style: { display: "flex", alignItems: "center" } },
-                                    b.type.ingredients.map(function (i) { return (React.createElement(GoodComponent, { good: i, pointerHover: false })); }),
+                                    React.createElement("div", { className: "row-good" }, b.type.ingredients.map(function (i) { return (React.createElement(GoodComponent, { good: i, pointerHover: false })); })),
                                     b.working ? (React.createElement("div", null,
                                         React.createElement("div", { className: "arrow-progress crispy", style: {
                                                 backgroundPosition: _this.getProgressBarX(Math.round(100 * (1 - b.timeRemaining / b.type.time))) + "px 0"
@@ -26523,7 +26554,7 @@ var GameApp = (function (_super) {
                             React.createElement("div", null, selectedCity.getAvailableBuildings().map(function (bt) { return (React.createElement(TooltipComponent_1.default, { tooltip: (React.createElement("div", { className: "box tooltip" },
                                     React.createElement("div", { style: { fontSize: 16 } }),
                                     React.createElement("div", { style: { display: "flex", alignItems: "center" } },
-                                        bt.ingredients.map(function (i) { return (React.createElement(GoodComponent, { good: i, pointerHover: false })); }),
+                                        React.createElement("div", { className: "row-good" }, bt.ingredients.map(function (i) { return (React.createElement(GoodComponent, { good: i, pointerHover: false })); })),
                                         React.createElement("div", null, "->"),
                                         React.createElement(GoodComponent, { good: bt.result, pointerHover: false })))) },
                                 React.createElement("button", { onClick: function () { return _this.buyBuilding(selectedCity, bt); }, style: { width: "100%", display: "flex", justifyContent: "space-between" } },
@@ -26536,10 +26567,10 @@ var GameApp = (function (_super) {
                     selectedTransport != null && (React.createElement("div", null,
                         React.createElement("hr", null),
                         selectedTransport.link.firstCity.name,
-                        this.displayListGoods(selectedTransport, this.getGoodsToDisplayFirstCity(), selectedTransport.firstCityActions),
+                        this.displayListGoods(selectedTransport, this.getGoodsToDisplayFirstCity(), selectedTransport.firstCityActions, selectedTransport.link.firstCity),
                         React.createElement("hr", null),
                         selectedTransport.link.secondCity.name,
-                        this.displayListGoods(selectedTransport, this.getGoodsToDisplaySecondCity(), selectedTransport.secondCityActions),
+                        this.displayListGoods(selectedTransport, this.getGoodsToDisplaySecondCity(), selectedTransport.secondCityActions, selectedTransport.link.secondCity),
                         React.createElement("hr", null),
                         React.createElement("button", { style: { width: "100%" } },
                             "Sell ",
@@ -26551,14 +26582,14 @@ var GameApp = (function (_super) {
                 selectedCity != null && (React.createElement("div", { className: "row-good" }, this.props.game.goodTypes.map(function (good) { return (React.createElement("div", { onClick: function () { return selectedCity.inventory.addItem(good, 1); } },
                     React.createElement(GoodComponent, { good: good, pointerHover: true }))); })))))));
     };
-    GameApp.prototype.displayListGoods = function (transport, goods, actions) {
+    GameApp.prototype.displayListGoods = function (transport, goods, actions, city) {
         var _this = this;
-        return (React.createElement("div", { style: { display: "flex", flexWrap: "wrap" } }, goods.map(function (good) {
+        return (React.createElement("div", { className: "row-good" }, goods.map(function (good) {
             var action = _this.getAction(good, actions);
             return (React.createElement("div", null,
                 React.createElement(GoodComponent, { good: good, onClick: function () {
-                        _this.toggleGoodCity(good, actions);
-                    }, text: action != null ? _this.getActionText(action.action) : null, pointerHover: true, addedTooltipText: action != null ? _this.getActionTooltip(action.action) : null })));
+                        _this.toggleGoodCity(good, actions, city);
+                    }, text: action != null ? _this.getActionText(action.transportAction) : null, pointerHover: true, addedTooltipText: action != null ? _this.getActionTooltip(action.transportAction) : null })));
         })));
     };
     GameApp.prototype.getGoodsToDisplayFirstCity = function () {
@@ -26613,28 +26644,46 @@ var GameApp = (function (_super) {
         var building = new Building(city, type);
         city.buildings.push(building);
     };
-    GameApp.prototype.toggleGoodCity = function (good, actions) {
+    GameApp.prototype.toggleGoodCity = function (good, actions, city) {
         var action = this.getAction(good, actions);
+        var newAction = false;
         if (action == null) {
             action = new CityAction(good, CityAction.TRANSPORT_ACTIONS[0]);
+            newAction = true;
             actions.push(action);
         }
-        else {
-            var i = CityAction.TRANSPORT_ACTIONS.indexOf(action.action) + 1;
-            if (i == CityAction.TRANSPORT_ACTIONS.length) {
-                actions.splice(actions.indexOf(action), 1);
+        // If it's a new action, we must then do the check for i
+        // If it's not, we must only check for i+1
+        var i = CityAction.TRANSPORT_ACTIONS.indexOf(action.transportAction) + (newAction ? 0 : 1);
+        var found = false;
+        while (!found && i != CityAction.TRANSPORT_ACTIONS.length) {
+            var possibleTransportAction = CityAction.TRANSPORT_ACTIONS[i];
+            // Is this action acceptable ?
+            if (possibleTransportAction == TransportAction.BUY) {
+                if (!city.canBuy(good)) {
+                    i++;
+                    continue;
+                }
             }
-            else {
-                action.action = CityAction.TRANSPORT_ACTIONS[i];
+            else if (possibleTransportAction == TransportAction.SELL) {
+                if (!city.canSell(good)) {
+                    i++;
+                    continue;
+                }
             }
+            action.transportAction = possibleTransportAction;
+            found = true;
+        }
+        if (!found) {
+            actions.splice(actions.indexOf(action), 1);
         }
     };
     GameApp.prototype.getGoodsToDisplay = function (link, city) {
         var goods = [];
-        goods = goods.concat(city.type.sellingGoods);
-        goods = goods.concat(city.type.buyingGoods);
-        goods = goods.concat(link.other(city).type.sellingGoods);
-        goods = goods.concat(link.other(city).type.buyingGoods);
+        goods = goods.concat(city.type.sellingGoods.map(function (o) { return o.good; }));
+        goods = goods.concat(city.type.buyingGoods.map(function (o) { return o.good; }));
+        goods = goods.concat(link.other(city).type.sellingGoods.map(function (o) { return o.good; }));
+        goods = goods.concat(link.other(city).type.buyingGoods.map(function (o) { return o.good; }));
         goods = goods.filter(function (g, i) { return goods.indexOf(g) == i; });
         return goods;
     };
@@ -26691,6 +26740,59 @@ var spriteAtlas = new SpriteAtlas();
 var game = new Game();
 window["game"] = game;
 ReactDOM.render(React.createElement(GameApp, { game: game }), document.getElementById("container"));
+
+
+/***/ }),
+/* 184 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+var main_1 = __webpack_require__(183);
+var mobx_1 = __webpack_require__(31);
+var City = (function () {
+    function City(game, name, type, x, y) {
+        this.game = game;
+        this.name = name;
+        this.type = type;
+        this.x = x;
+        this.y = y;
+        this.buildings = [];
+        this.inventory = new main_1.Inventory();
+    }
+    City.prototype.getAvailableBuildings = function () {
+        return this.game.buildingTypes;
+    };
+    City.prototype.update = function (delta) {
+        this.buildings.map(function (b) {
+            b.update(delta);
+        });
+    };
+    City.prototype.canBuy = function (good) {
+        return this.getBuyOffer(good) != null;
+    };
+    City.prototype.canSell = function (good) {
+        return this.getSellOffer(good) != null;
+    };
+    City.prototype.getBuyOffer = function (good) {
+        return this.type.buyingGoods.filter(function (o) { return o.good == good; })[0];
+    };
+    City.prototype.getSellOffer = function (good) {
+        return this.type.sellingGoods.filter(function (o) { return o.good == good; })[0];
+    };
+    return City;
+}());
+__decorate([
+    mobx_1.observable
+], City.prototype, "buildings", void 0);
+exports.default = City;
 
 
 /***/ })
